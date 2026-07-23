@@ -1,0 +1,4 @@
+Agent Runtime Security Lab
+
+This document is intentionally safe and belongs to the isolated public workspace.
+The gateway should allow an agent to read it through the MCP read_document tool.

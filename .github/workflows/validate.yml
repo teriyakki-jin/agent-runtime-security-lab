@@ -1,0 +1,63 @@
+name: Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q agent-api/app
+          python -m compileall -q mcp-server/app
+
+      - name: Validate OPA policies
+        run: |
+          docker run --rm \
+            -v "$PWD/policy:/policies:ro" \
+            openpolicyagent/opa:1.17.0-static \
+            test /policies -v
+
+      - name: Validate PowerShell scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parseErrors = @()
+          Get-ChildItem scripts -Filter '*.ps1' | ForEach-Object {
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                  $_.FullName,
+                  [ref]$tokens,
+                  [ref]$errors
+              ) | Out-Null
+              $parseErrors += $errors
+          }
+          if ($parseErrors.Count -gt 0) {
+              $parseErrors | Format-List
+              throw 'PowerShell syntax validation failed.'
+          }
+
+      - name: Run container integration scenarios
+        shell: pwsh
+        run: ./scripts/run-lab.ps1
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Stop integration lab
+        if: always()
+        run: docker compose down --volumes

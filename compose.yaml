@@ -1,0 +1,75 @@
+name: agent-runtime-security-lab
+
+services:
+  opa:
+    image: openpolicyagent/opa:1.17.0-static
+    container_name: arsl-opa
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    volumes:
+      - ./policy:/policies:ro
+    ports:
+      - "127.0.0.1:8181:8181"
+    networks:
+      - agent_net
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/jaeger:2.18.0
+    container_name: arsl-jaeger
+    ports:
+      - "127.0.0.1:16686:16686"
+    networks:
+      - agent_net
+    restart: unless-stopped
+
+  mcp-server:
+    build:
+      context: ./mcp-server
+    container_name: arsl-mcp-server
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: mcp-tool-server
+    ports:
+      - "127.0.0.1:8001:8000"
+    networks:
+      - agent_net
+    depends_on:
+      - jaeger
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  agent-api:
+    build:
+      context: ./agent-api
+    container_name: arsl-agent-api
+    environment:
+      MCP_SERVER_URL: http://mcp-server:8000/mcp
+      OPA_DECISION_URL: http://opa:8181/v1/data/agent_security/decision
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: agent-gateway
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - agent_net
+    depends_on:
+      - jaeger
+      - mcp-server
+      - opa
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  agent_net:
+    driver: bridge
