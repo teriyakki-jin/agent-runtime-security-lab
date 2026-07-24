@@ -8,9 +8,9 @@ $LabRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $LabRoot
 
 if ($RemoveImages) {
-    docker compose down --rmi local
+    docker compose --profile soc down --rmi local
 } else {
-    docker compose down
+    docker compose --profile soc down
 }
 
 if ($LASTEXITCODE -ne 0) {

@@ -1,0 +1,84 @@
+{
+  "index_patterns": ["arsl-ocsf-*"],
+  "priority": 500,
+  "version": 1,
+  "_meta": {
+    "project": "agent-runtime-security-lab",
+    "schema": "OCSF 1.8.0",
+    "phase": 5
+  },
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "arsl-ocsf-7d"
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "time": { "type": "date", "format": "epoch_millis" },
+        "category_uid": { "type": "integer" },
+        "category_name": { "type": "keyword" },
+        "class_uid": { "type": "integer" },
+        "class_name": { "type": "keyword" },
+        "type_uid": { "type": "integer" },
+        "severity_id": { "type": "integer" },
+        "severity": { "type": "keyword" },
+        "status_id": { "type": "integer" },
+        "status": { "type": "keyword" },
+        "is_alert": { "type": "boolean" },
+        "message": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+        "metadata": {
+          "properties": {
+            "uid": { "type": "keyword" },
+            "version": { "type": "keyword" },
+            "profiles": { "type": "keyword" },
+            "product": {
+              "properties": {
+                "name": { "type": "keyword" },
+                "vendor_name": { "type": "keyword" },
+                "version": { "type": "keyword" }
+              }
+            }
+          }
+        },
+        "finding_info": {
+          "properties": {
+            "uid": { "type": "keyword" },
+            "title": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+            "types": { "type": "keyword" }
+          }
+        },
+        "unmapped": {
+          "properties": {
+            "security": {
+              "properties": {
+                "argument_fingerprint": { "type": "keyword" },
+                "approval_id": { "type": "keyword" },
+                "correlation_method": { "type": "keyword" },
+                "event_type": { "type": "keyword" },
+                "intent_id": { "type": "keyword" },
+                "matched": { "type": "boolean" },
+                "observation_id": { "type": "keyword" },
+                "observation_source": { "type": "keyword" },
+                "policy_action": { "type": "keyword" },
+                "risk_score": { "type": "integer" },
+                "scenario_id": { "type": "keyword" },
+                "target_fingerprint": { "type": "keyword" },
+                "tool": { "type": "keyword" }
+              }
+            }
+          }
+        },
+        "lab": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "phase": { "type": "keyword" },
+            "stream": { "type": "keyword" }
+          }
+        }
+      }
+    }
+  }
+}

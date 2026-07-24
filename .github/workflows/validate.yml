@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Validate Docker Compose
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          docker compose --profile soc config --quiet
 
       - name: Compile Python sources
         run: |
@@ -30,6 +32,17 @@ jobs:
         run: |
           python -m unittest discover -s sensor/tests -v
           python -m json.tool docs/evidence/phase4-tetragon-validation.json > /dev/null
+          python -m json.tool docs/evidence/phase5-soc-validation.json > /dev/null
+          python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          lines = Path("deploy/kibana/arsl-soc-dashboard.ndjson").read_text().splitlines()
+          assert len(lines) == 6
+          objects = [json.loads(line) for line in lines]
+          assert any(item.get("id") == "arsl-soc-overview" for item in objects)
+          PY
 
       - name: Validate OPA policies
         run: |

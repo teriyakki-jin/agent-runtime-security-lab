@@ -2,13 +2,14 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 4 — Live Tetragon eBPF Evidence + Automatic Correlation**
+> Current: **Phase 5 — OCSF SOC Pipeline + Kibana Threat Hunting**
 
-![Phase 4 live eBPF runtime dashboard](docs/screenshots/phase4-live-ebpf.png)
+![Phase 5 Kibana SOC dashboard](docs/screenshots/phase5-soc-overview.png)
 
 - [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
 - [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
 - [Phase 4: Live Tetragon eBPF Validation](docs/PHASE4.md)
+- [Phase 5: OCSF SOC Pipeline](docs/PHASE5.md)
 
 ## Why this project
 
@@ -41,6 +42,10 @@ flowchart LR
     OBS --> CORRELATOR
     CORRELATOR --> FINDING["OCSF Detection Finding"]
     API --> JAEGER["Jaeger / OpenTelemetry"]
+    API -->|"OCSF API Activity"| LOGSTASH["Logstash"]
+    FINDING -->|"OCSF Detection Finding"| LOGSTASH
+    LOGSTASH --> ES["Elasticsearch"]
+    ES --> KIBANA["Kibana SOC Dashboard"]
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -140,6 +145,26 @@ tetra getevents -o json | python sensor/tetragon_adapter.py \
 
 `--intent-id`는 선택 사항입니다. 생략하면 Gateway가 container identity와 15초 event window로 자동 correlation합니다. 자세한 실센서 증거와 한계는 [Phase 4 문서](docs/PHASE4.md)를 참고하세요.
 
+## Try Phase 5 — SOC pipeline
+
+Elastic Stack은 기본 랩과 분리된 `soc` 프로필로 실행됩니다. 다른 로컬 Elastic 실습과 충돌하지 않도록 기본 포트는 19200/15601/19600을 사용합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-soc.ps1
+```
+
+- Kibana SOC dashboard: <http://127.0.0.1:15601/app/dashboards#/view/arsl-soc-overview>
+- Elasticsearch API: <http://127.0.0.1:19200>
+- Logstash monitoring API: <http://127.0.0.1:19600>
+
+Logstash는 5초마다 두 OCSF 엔드포인트를 수집합니다. `metadata.uid`를 Elasticsearch document ID로 사용하므로 재수집해도 중복 문서가 생성되지 않습니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
+```
+
+실제 검증 결과와 운영 한계는 [Phase 5 문서](docs/PHASE5.md)와 [검증 증거](docs/evidence/phase5-soc-validation.json)에 기록했습니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -158,9 +183,10 @@ tetra getevents -o json | python sensor/tetragon_adapter.py \
 docker compose config --quiet
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 ```
 
-기본 검증은 OPA 5개 정책 테스트, Agent API 14개와 adapter 5개 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. 별도 Phase 4 검증은 실제 커널 event 2종을 확인합니다. GitHub Actions에서는 권한 제한 때문에 결정론적 기본 검증만 실행합니다.
+기본 검증은 OPA 5개 정책 테스트, Agent API 14개와 adapter 5개 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. 별도 Phase 4 검증은 실제 커널 event 2종을 확인하고, Phase 5 검증은 Elastic 상태·UID 중복·Critical finding·개인정보 경계·ILM·Kibana saved object를 확인합니다. GitHub Actions에서는 권한과 자원 제한 때문에 결정론적 기본 검증 및 Phase 5 정적 자산 검증만 실행합니다.
 
 ## Tech stack
 
@@ -172,6 +198,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps
 | Tetragon 1.7.0 | 실제 eBPF process/file/network runtime telemetry |
 | OCSF 1.8 | API Activity, AI Operation, Detection Finding |
 | OpenTelemetry + Jaeger 2.18 | Agent/tool distributed tracing |
+| Elasticsearch 9.4.2 | OCSF index, mapping, 7-day retention |
+| Logstash 9.4.2 | Idempotent OCSF collection and normalization |
+| Kibana 9.4.2 | SOC metrics, severity and runtime hunt dashboard |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -182,11 +211,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps
 - [x] Intent / runtime mismatch detection
 - [x] Signed Tetragon JSON adapter
 - [x] Docker Desktop WSL2 실센서 end-to-end 캡처 자동화
+- [x] OCSF Logstash pipeline, Elasticsearch 보존 정책, Kibana hunt dashboard
 - [ ] Kind/Kubernetes Runtime Hook과 pod identity correlation
 - [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [ ] Local LLM indirect prompt injection 재현
 - [ ] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑
-- [ ] Elasticsearch/Kibana 장기 보관과 hunt dashboard
+- [ ] Elastic detection rule과 Slack/Teams alert connector
 
 ## References
 
@@ -195,7 +225,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps
 - [OCSF schema](https://github.com/ocsf/ocsf-schema)
 - [MCP Security Best Practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices)
 - [OWASP Agentic Security Initiative](https://genai.owasp.org/initiatives/agentic-security-initiative/)
+- [Elastic Stack installation](https://www.elastic.co/guide/en/elastic-stack/current/installing-elastic-stack.html)
+- [Logstash HTTP poller](https://www.elastic.co/docs/reference/logstash/plugins/plugins-inputs-http_poller)
 
 ## Safety scope
 
-이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다.
+이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS와 인증을 적용해야 합니다.
