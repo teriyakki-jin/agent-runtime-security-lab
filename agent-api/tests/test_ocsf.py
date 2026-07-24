@@ -137,3 +137,46 @@ class OcsfMappingTests(unittest.TestCase):
             result["finding_info"]["attacks"][0]["technique"]["uid"], "T1078"
         )
         self.assertNotIn("/bin/echo", str(result))
+
+    def test_kubernetes_attack_chain_exports_two_attack_techniques(self) -> None:
+        finding = {
+            "finding_id": "finding-chain",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "intent_id": "",
+            "finding_type": "kubernetes_privilege_escalation_chain",
+            "title": "Kubernetes RBAC escalation reached runtime execution",
+            "reason": "A ServiceAccount changed RBAC, created a Pod, and executed code.",
+            "severity_id": 5,
+            "severity": "Critical",
+            "matched": False,
+            "tool": "kubernetes_api",
+            "policy_action": "deny",
+            "observation": {
+                "observation_id": "observation-chain",
+                "source": "kubernetes-audit+tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/echo",
+                "target_fingerprint": "0123456789abcdef",
+                "container": "tool",
+                "workload_identity": {
+                    "cluster": "arsl-phase8",
+                    "namespace": "arsl-lab",
+                    "pod_name": "audit-shadow",
+                    "pod_uid": "pod-uid-chain",
+                    "service_account": "compromised-agent",
+                    "container_name": "tool",
+                },
+            },
+        }
+
+        result = to_ocsf_detection_finding(finding)
+
+        self.assertEqual(
+            [item["technique"]["uid"] for item in result["finding_info"]["attacks"]],
+            ["T1098.006", "T1610"],
+        )
+        self.assertEqual(
+            result["unmapped"]["security"]["owasp_agentic"][0]["uid"],
+            "ASI03",
+        )
+        self.assertNotIn("/bin/echo", str(result))

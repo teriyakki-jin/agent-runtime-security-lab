@@ -56,3 +56,20 @@ class ThreatMappingTests(unittest.TestCase):
 
         self.assertEqual(result["owasp_agentic"][0]["uid"], "ASI03")
         self.assertEqual(result["mitre_attacks"][0]["technique"]["uid"], "T1078")
+
+    def test_kubernetes_escalation_chain_maps_identity_and_container_attacks(self) -> None:
+        result = classify_finding(
+            finding(
+                "process_exec",
+                finding_type="kubernetes_privilege_escalation_chain",
+            )
+        )
+
+        self.assertEqual(
+            [item["uid"] for item in result["owasp_agentic"]],
+            ["ASI03"],
+        )
+        self.assertEqual(
+            [item["technique"]["uid"] for item in result["mitre_attacks"]],
+            ["T1098.006", "T1610"],
+        )

@@ -1,0 +1,69 @@
+{
+  "phase": 8,
+  "validated_at": "2026-07-24",
+  "environment": {
+    "host": "Windows Docker Desktop WSL2",
+    "kind": "0.32.0",
+    "kubernetes": "1.36.1",
+    "kubectl": "1.36.1",
+    "helm": "4.2.3",
+    "tetragon": "1.7.0",
+    "cluster": "arsl-phase8"
+  },
+  "finding": {
+    "type": "kubernetes_privilege_escalation_chain",
+    "severity": "Critical",
+    "effective_actor": "system:serviceaccount:arsl-lab:compromised-agent",
+    "correlation_delta_ms": 17124,
+    "owasp_agentic": ["ASI03"],
+    "mitre_attack": ["T1098.006", "T1610"]
+  },
+  "chain": {
+    "rbac_grant": {
+      "audit_id": "0347209b-68d9-4d8e-83ce-da5525ba3741",
+      "resource": "rolebindings",
+      "name": "shadow-cluster-admin",
+      "response_code": 201
+    },
+    "pod_create": {
+      "audit_id": "cb472850-2f91-4857-a1e0-499de3928d8d",
+      "pod": "audit-shadow",
+      "response_code": 201
+    },
+    "pod_exec": {
+      "audit_id": "1fffc2c7-e6ed-434f-8a8c-a5801c7cfe00",
+      "verb": "get",
+      "subresource": "exec",
+      "response_code": 101
+    },
+    "runtime_exec": {
+      "source": "Tetragon process_exec",
+      "target_fingerprint": "892bd8ab64bac2fe"
+    }
+  },
+  "workload_identity": {
+    "namespace": "arsl-lab",
+    "pod_name": "audit-shadow",
+    "pod_uid": "c593e16b-75fd-4df8-84b4-5231d1f74eef",
+    "service_account": "compromised-agent",
+    "container_name": "tool"
+  },
+  "telemetry": {
+    "audit_events_scanned": 6379,
+    "tetragon_events_scanned": 13,
+    "ocsf_version": "1.8.0",
+    "product_version": "0.8.0"
+  },
+  "privacy": {
+    "service_account_token_exported": false,
+    "raw_process_arguments_exported": false,
+    "audit_request_bodies_exported": false
+  },
+  "artifacts": {
+    "screenshot": "docs/screenshots/phase8-audit-attack-chain.png",
+    "screenshot_sha256": "4b18c0488353b8db4ed1af80c221b4f7b40573280df02b31c269789b0804a505",
+    "cluster_config": "deploy/kind/phase8-cluster.yaml",
+    "audit_policy": "deploy/kubernetes/phase8-audit-policy.yaml",
+    "verifier": "kubernetes/audit_chain.py"
+  }
+}

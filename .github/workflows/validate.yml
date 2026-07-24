@@ -34,10 +34,12 @@ jobs:
         run: |
           python -m unittest discover -s sensor/tests -v
           python -m unittest discover -s detection/tests -v
+          python -m unittest discover -s kubernetes/tests -v
           python -m json.tool docs/evidence/phase4-tetragon-validation.json > /dev/null
           python -m json.tool docs/evidence/phase5-soc-validation.json > /dev/null
           python -m json.tool docs/evidence/phase6-threat-detection.json > /dev/null
           python -m json.tool docs/evidence/phase7-kubernetes-identity.json > /dev/null
+          python -m json.tool docs/evidence/phase8-kubernetes-audit-chain.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elastic/detection-rules/agent-runtime-rules.json > /dev/null
@@ -62,6 +64,27 @@ jobs:
               "seccompProfile:",
           ):
               assert control in workloads
+          audit_cluster = Path("deploy/kind/phase8-cluster.yaml").read_text()
+          audit_policy = Path("deploy/kubernetes/phase8-audit-policy.yaml").read_text()
+          attack_pod = Path("deploy/kubernetes/phase8-shadow-pod.yaml").read_text()
+          rbac_lab = Path("deploy/kubernetes/phase8-rbac-bootstrap.yaml").read_text()
+          assert "audit-log-path:" in audit_cluster
+          assert "audit-policy-file:" in audit_cluster
+          assert 'resources: ["rolebindings", "clusterrolebindings"]' in audit_policy
+          assert 'resources: ["pods", "pods/exec"]' in audit_policy
+          assert 'resourceNames: ["cluster-admin"]' in rbac_lab
+          assert 'verbs: ["bind"]' in rbac_lab
+          for control in (
+              "runAsNonRoot: true",
+              "allowPrivilegeEscalation: false",
+              'drop: ["ALL"]',
+              "automountServiceAccountToken: false",
+              "seccompProfile:",
+          ):
+              assert control in attack_pod
+          phase8 = json.loads(Path("docs/evidence/phase8-kubernetes-audit-chain.json").read_text())
+          assert phase8["finding"]["mitre_attack"] == ["T1098.006", "T1610"]
+          assert not any(phase8["privacy"].values())
           PY
 
       - name: Validate OPA policies

@@ -177,8 +177,11 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Agent Runtime Security Lab",
-    version="0.7.0",
-    description="Policy-enforced MCP gateway with eBPF and Kubernetes identity correlation.",
+    version="0.8.0",
+    description=(
+        "Policy-enforced MCP gateway with eBPF, Kubernetes identity, and "
+        "audit/RBAC attack-chain correlation."
+    ),
     lifespan=lifespan,
 )
 
@@ -348,7 +351,7 @@ async def dashboard() -> FileResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "agent-gateway", "version": "0.7.0"}
+    return {"status": "ok", "service": "agent-gateway", "version": "0.8.0"}
 
 
 @app.get("/api/scenarios")

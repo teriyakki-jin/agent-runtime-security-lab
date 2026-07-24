@@ -60,6 +60,25 @@ WORKLOAD_IDENTITY_ATTACK: dict[str, Any] = {
     },
 }
 
+KUBERNETES_PRIVILEGE_ESCALATION_ATTACKS: list[dict[str, Any]] = [
+    {
+        "tactic": {"uid": "TA0004", "name": "Privilege Escalation"},
+        "technique": {
+            "uid": "T1098.006",
+            "name": "Additional Container Cluster Roles",
+            "src_url": "https://attack.mitre.org/techniques/T1098/006/",
+        },
+    },
+    {
+        "tactic": {"uid": "TA0002", "name": "Execution"},
+        "technique": {
+            "uid": "T1610",
+            "name": "Deploy Container",
+            "src_url": "https://attack.mitre.org/techniques/T1610/",
+        },
+    },
+]
+
 
 def classify_finding(finding: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Return deterministic threat-framework mappings for an alertable finding."""
@@ -72,6 +91,11 @@ def classify_finding(finding: dict[str, Any]) -> dict[str, list[dict[str, Any]]]
         return {
             "owasp_agentic": [deepcopy(OWASP_AGENTIC_2026["ASI03"])],
             "mitre_attacks": [deepcopy(WORKLOAD_IDENTITY_ATTACK)],
+        }
+    if finding["finding_type"] == "kubernetes_privilege_escalation_chain":
+        return {
+            "owasp_agentic": [deepcopy(OWASP_AGENTIC_2026["ASI03"])],
+            "mitre_attacks": deepcopy(KUBERNETES_PRIVILEGE_ESCALATION_ATTACKS),
         }
     if finding["finding_type"] == "orphan_runtime_activity":
         owasp_ids.append("ASI10")

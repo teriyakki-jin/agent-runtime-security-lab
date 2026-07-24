@@ -2,7 +2,9 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 7 — Kubernetes Workload Identity Correlation**
+> Current: **Phase 8 — Kubernetes Audit/RBAC Attack Chain**
+
+![Phase 8 Kubernetes audit attack chain](docs/screenshots/phase8-audit-attack-chain.png)
 
 ![Phase 7 Kubernetes workload identity correlation](docs/screenshots/phase7-kubernetes-identity.png)
 
@@ -12,6 +14,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 5: OCSF SOC Pipeline](docs/PHASE5.md)
 - [Phase 6: Detection-as-Code & Threat Mapping](docs/PHASE6.md)
 - [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
+- [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
 
 ## Why this project
 
@@ -57,6 +60,9 @@ flowchart LR
     K8S["Kubernetes Pod Inventory"] --> IDENTITY["Workload Identity Resolver"]
     TETRAGON --> IDENTITY
     IDENTITY --> CORRELATOR
+    AUDIT["Kubernetes Audit Log"] --> CHAIN["RBAC Attack Chain Correlator"]
+    IDENTITY --> CHAIN
+    CHAIN --> FINDING
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -204,6 +210,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 
 실제 Kind/Tetragon 검증 결과는 [Phase 7 문서](docs/PHASE7.md)와 [검증 증거](docs/evidence/phase7-kubernetes-identity.json)에 기록했습니다.
 
+## Try Phase 8 — Kubernetes audit attack chain
+
+전용 Audit-enabled Kind 클러스터에서 ServiceAccount RBAC 권한 상승부터 Tetragon 커널 실행까지 하나의 Critical finding으로 연결합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps1
+```
+
+- `RoleBinding create → Pod create → pods/exec → process_exec` 시간순 상관분석
+- 인증 사용자와 impersonated/effective ServiceAccount 신원 분리
+- OWASP ASI03 / MITRE T1098.006 / T1610 매핑
+- 토큰, 원본 명령 인자, Audit request body를 정적 증거에서 제외
+
+실제 검증 결과는 [Phase 8 문서](docs/PHASE8.md)와 [검증 증거](docs/evidence/phase8-kubernetes-audit-chain.json)에 기록했습니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -225,9 +246,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps1
 ```
 
-기본 검증은 OPA 5개 정책 테스트, Agent API 25개와 sensor 8개 단위 테스트, 정책 시나리오, 승인/replay 방어, runtime correlation, OCSF 비식별화를 확인합니다. Phase 4는 실제 커널 event, Phase 5/6는 SOC와 detection-as-code, Phase 7은 실제 Kind Pod UID·ServiceAccount·Tetragon event correlation을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~7 정적 자산 검증을 실행합니다.
+기본 검증은 OPA 5개 정책 테스트, Agent API 27개, sensor 8개, Kubernetes attack-chain 4개 단위 테스트와 정책 시나리오, 승인/replay 방어, runtime correlation, OCSF 비식별화를 확인합니다. Phase 4는 실제 커널 event, Phase 5/6는 SOC와 detection-as-code, Phase 7은 실제 workload identity, Phase 8은 Audit/RBAC/Tetragon 공격 체인을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~8 정적 자산 검증을 실행합니다.
 
 ## Tech stack
 
@@ -244,6 +266,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 | Kibana 9.4.2 | SOC metrics, severity and runtime hunt dashboard |
 | ES|QL detection pack | Versioned agent runtime rules and idempotent alerts |
 | Kind + Kubernetes 1.36 | Reproducible workload identity and ServiceAccount lab |
+| Kubernetes Audit Log | RBAC privilege escalation and API-to-runtime attack chain |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -258,7 +281,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 - [x] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑
 - [x] ES|QL detection-as-code와 Kibana threat dashboard
 - [x] Kind/Kubernetes Pod UID·ServiceAccount runtime correlation
-- [ ] Kubernetes audit log와 RBAC privilege escalation correlation
+- [x] Kubernetes audit log와 RBAC privilege escalation correlation
 - [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [ ] Local LLM indirect prompt injection 재현
 - [ ] Elastic native detection scheduling과 Slack/Teams alert connector
@@ -278,7 +301,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 - [Tetragon Kubernetes deployment](https://tetragon.io/docs/installation/kubernetes/)
 - [Kubernetes ServiceAccounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
 - [MITRE ATT&CK T1078](https://attack.mitre.org/techniques/T1078/)
+- [Kubernetes Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
+- [Kubernetes RBAC Good Practices](https://kubernetes.io/docs/concepts/security/rbac-good-practices/)
+- [MITRE ATT&CK T1098.006](https://attack.mitre.org/techniques/T1098/006/)
+- [MITRE ATT&CK T1610](https://attack.mitre.org/techniques/T1610/)
 
 ## Safety scope
 
 이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5/6 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS, 인증, Detection Engine 권한을 적용해야 합니다. Phase 7 Kind 클러스터는 전용 `arsl-phase7` 이름을 사용하며 테스트 workload의 ServiceAccount token automount를 비활성화합니다.
+
+Phase 8은 전용 `arsl-phase8` 클러스터와 `kubectl` impersonation만 사용하며 실제 ServiceAccount token을 발급하거나 저장하지 않습니다.

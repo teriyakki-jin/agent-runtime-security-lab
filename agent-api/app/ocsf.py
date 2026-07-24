@@ -7,7 +7,7 @@ from app.threat import classify_finding
 
 
 OCSF_VERSION = "1.8.0"
-PRODUCT_VERSION = "0.7.0"
+PRODUCT_VERSION = "0.8.0"
 OCSF_CATEGORY_UID = 6
 OCSF_CLASS_UID = 6003
 
