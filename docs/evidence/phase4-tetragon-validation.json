@@ -1,0 +1,46 @@
+{
+  "validated_at": "2026-07-24T02:57:27Z",
+  "environment": {
+    "sensor": "Tetragon v1.7.0",
+    "image_digest": "sha256:deda51c3f88e4d26b4d76c99ea207f2b05f9e40c210e0f04a37ca632ab7bf527",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "btf": "/sys/kernel/btf/vmlinux",
+    "architecture": "x86_64"
+  },
+  "tracing_policy": {
+    "name": "arsl-runtime-observation",
+    "state": "enabled",
+    "mode": "monitor_only",
+    "sensor": "generic_kprobe",
+    "kernel_memory": "1.52 MB"
+  },
+  "gateway_status": {
+    "sensor_mode": "tetragon",
+    "auto_correlated": 2,
+    "correlation_window_seconds": 15.0
+  },
+  "results": [
+    {
+      "event_type": "file_access",
+      "finding_type": "intent_runtime_match",
+      "severity": "Informational",
+      "matched": true,
+      "correlation_method": "container_time_window",
+      "correlation_delta_ms": 110,
+      "target_fingerprint": "6de59ec3aa34c459"
+    },
+    {
+      "event_type": "process_exec",
+      "finding_type": "policy_runtime_mismatch",
+      "severity": "Critical",
+      "matched": false,
+      "correlation_method": "container_time_window",
+      "correlation_delta_ms": 476,
+      "target_fingerprint": "4cd7ab41f5fca4b9"
+    }
+  ],
+  "privacy": {
+    "raw_tool_arguments_stored": false,
+    "raw_runtime_targets_in_evidence": false
+  }
+}

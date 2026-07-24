@@ -46,7 +46,7 @@
       cursor: pointer;
     }
     button:hover, .link:hover { border-color: var(--cyan); }
-    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+    .metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 24px; }
     .metric, .panel { border: 1px solid var(--border); background: rgba(15, 23, 36, .9); border-radius: 14px; }
     .metric { padding: 18px; }
     .metric span { display: block; color: var(--muted); font: 700 11px/1 ui-monospace, monospace; text-transform: uppercase; }
@@ -88,9 +88,9 @@
   <main>
     <header>
       <div>
-        <div class="eyebrow">PHASE 3 · INTENT / RUNTIME CORRELATION</div>
+        <div class="eyebrow">PHASE 4 · LIVE eBPF RUNTIME EVIDENCE</div>
         <h1>Agent Runtime Security</h1>
-        <p class="subtitle">Correlate what an AI agent was authorized to do with what the runtime actually did. Tetragon-ready telemetry, signed sensor ingestion, and OCSF Detection Findings.</p>
+        <p class="subtitle">Tetragon kernel telemetry is automatically correlated to agent intent by container identity and event time—no manually supplied intent ID.</p>
       </div>
       <nav class="links">
         <a class="link" href="/docs">OpenAPI</a>
@@ -102,6 +102,7 @@
 
     <section class="metrics">
       <article class="metric"><span>Gateway</span><strong id="health">...</strong></article>
+      <article class="metric"><span>Sensor</span><strong id="sensor-mode">...</strong></article>
       <article class="metric"><span>Events</span><strong id="event-count">0</strong></article>
       <article class="metric"><span>Pending</span><strong id="pending-count">0</strong></article>
       <article class="metric"><span>Blocked</span><strong id="blocked-count">0</strong></article>
@@ -120,7 +121,7 @@
       </article>
 
       <article class="panel wide">
-        <div class="panel-head"><h2>Intent / runtime attack lab</h2><span class="badge review">Tetragon-ready</span></div>
+        <div class="panel-head"><h2>Intent / runtime attack lab</h2><span class="badge allow">Live eBPF</span></div>
         <div class="runtime-list" id="runtime-scenarios"></div>
       </article>
 
@@ -128,7 +129,7 @@
         <div class="panel-head"><h2>Runtime correlation findings</h2><span class="badge mismatch">OCSF 2004</span></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Time</th><th>Result</th><th>Severity</th><th>Tool</th><th>Observed</th><th>Source</th><th>Target hash</th></tr></thead>
+            <thead><tr><th>Time</th><th>Result</th><th>Severity</th><th>Tool</th><th>Observed</th><th>Source</th><th>Correlation</th><th>Target hash</th></tr></thead>
             <tbody id="runtime-findings"></tbody>
           </table>
         </div>
@@ -325,12 +326,13 @@
           item.tool || 'unmapped',
           observation.event_type,
           observation.source,
+          observation.correlation_method,
           observation.target_fingerprint
         ];
         values.forEach((value, index) => {
           const cell = document.createElement('td');
           if (index === 1) cell.append(badge(String(value)));
-          else if (index === 6) {
+          else if (index === 7) {
             const code = document.createElement('code');
             code.textContent = value;
             cell.append(code);
@@ -343,11 +345,12 @@
 
     async function refresh() {
       try {
-        const [health, scenarios, approvals, events, runtimeScenarios, findings] = await Promise.all([
+        const [health, scenarios, approvals, events, runtimeScenarios, findings, runtimeStatus] = await Promise.all([
           api('/health'), api('/api/scenarios'), api('/api/approvals'), api('/api/events'),
-          api('/api/runtime/scenarios'), api('/api/runtime/findings')
+          api('/api/runtime/scenarios'), api('/api/runtime/findings'), api('/api/runtime/status')
         ]);
         document.querySelector('#health').textContent = health.status.toUpperCase();
+        document.querySelector('#sensor-mode').textContent = runtimeStatus.sensor_mode.toUpperCase();
         document.querySelector('#event-count').textContent = events.length;
         document.querySelector('#pending-count').textContent = approvals.filter(x => x.status === 'pending').length;
         document.querySelector('#blocked-count').textContent = events.filter(x => !x.executed).length;

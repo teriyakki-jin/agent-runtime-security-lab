@@ -63,7 +63,7 @@ def to_ocsf_api_activity(event: dict[str, Any]) -> dict[str, Any]:
             "product": {
                 "name": "Agent Runtime Security Lab",
                 "vendor_name": "teriyakki-jin",
-                "version": "0.3.0",
+                "version": "0.4.0",
             },
             "uid": event["event_id"],
         },
@@ -120,7 +120,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
             "product": {
                 "name": "Agent Runtime Security Lab",
                 "vendor_name": "teriyakki-jin",
-                "version": "0.3.0",
+                "version": "0.4.0",
             },
             "uid": finding["finding_id"],
         },
@@ -148,6 +148,8 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
                 "observation_id": observation["observation_id"],
                 "observation_source": observation["source"],
                 "event_type": observation["event_type"],
+                "correlation_method": observation.get("correlation_method"),
+                "correlation_delta_ms": observation.get("correlation_delta_ms"),
                 "target_fingerprint": observation["target_fingerprint"],
                 "tool": finding["tool"],
                 "policy_action": finding["policy_action"],

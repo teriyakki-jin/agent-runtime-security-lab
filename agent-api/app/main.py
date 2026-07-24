@@ -177,8 +177,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Agent Runtime Security Lab",
-    version="0.3.0",
-    description="Policy-enforced MCP gateway with runtime intent correlation.",
+    version="0.4.0",
+    description="Policy-enforced MCP gateway with live eBPF runtime correlation.",
     lifespan=lifespan,
 )
 
@@ -348,7 +348,7 @@ async def dashboard() -> FileResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "agent-gateway", "version": "0.3.0"}
+    return {"status": "ok", "service": "agent-gateway", "version": "0.4.0"}
 
 
 @app.get("/api/scenarios")
@@ -453,6 +453,11 @@ async def list_runtime_observations() -> list[dict[str, Any]]:
 @app.get("/api/runtime/findings")
 async def list_runtime_findings() -> list[dict[str, Any]]:
     return runtime_monitor.finding_list()
+
+
+@app.get("/api/runtime/status")
+async def runtime_status() -> dict[str, Any]:
+    return runtime_monitor.status()
 
 
 @app.get("/api/runtime/ocsf")

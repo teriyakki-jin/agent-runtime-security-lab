@@ -27,7 +27,9 @@ jobs:
           python -m compileall -q sensor
 
       - name: Test Tetragon event adapter
-        run: python -m unittest discover -s sensor/tests -v
+        run: |
+          python -m unittest discover -s sensor/tests -v
+          python -m json.tool docs/evidence/phase4-tetragon-validation.json > /dev/null
 
       - name: Validate OPA policies
         run: |

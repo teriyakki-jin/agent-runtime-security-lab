@@ -2,12 +2,13 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 3 — Intent / Runtime Correlation + Tetragon Adapter**
+> Current: **Phase 4 — Live Tetragon eBPF Evidence + Automatic Correlation**
 
-![Phase 3 intent and runtime correlation dashboard](docs/screenshots/phase3-runtime-correlation.png)
+![Phase 4 live eBPF runtime dashboard](docs/screenshots/phase4-live-ebpf.png)
 
 - [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
 - [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
+- [Phase 4: Live Tetragon eBPF Validation](docs/PHASE4.md)
 
 ## Why this project
 
@@ -17,6 +18,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - 위험 작업은 사람의 승인과 1회성 HMAC capability 요구
 - 실행 전 agent intent를 별도 원장에 기록
 - Tetragon 이벤트를 프로세스·파일·네트워크 observation으로 정규화
+- Docker container ID와 event timestamp로 intent를 자동 상관분석
 - intent와 observation이 다르면 Critical/High finding 생성
 - 원본 인자와 관측 대상을 OCSF 내보내기에서 fingerprint로 비식별화
 - Jaeger에서 `invoke_agent`와 `execute_tool` span 추적
@@ -41,7 +43,7 @@ flowchart LR
     API --> JAEGER["Jaeger / OpenTelemetry"]
 ```
 
-기본 Compose 실습은 Windows Docker Desktop과 GitHub Actions에서도 결정론적으로 재현되도록 센서 시뮬레이터를 사용합니다. 실제 eBPF 수집은 BTF를 지원하는 Linux/Kubernetes 환경에서 선택적으로 연결합니다.
+기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
 
 ## Detection scenarios
 
@@ -104,6 +106,24 @@ Invoke-RestMethod http://127.0.0.1:8080/api/runtime/findings
 Invoke-RestMethod http://127.0.0.1:8080/api/runtime/ocsf
 ```
 
+## Try Phase 4 — live eBPF
+
+기본 Lab을 실행한 뒤 관리자 권한이 아닌 일반 PowerShell에서 실센서 검증을 실행합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps1
+```
+
+스크립트가 수행하는 작업:
+
+1. 공식 `quay.io/cilium/tetragon:v1.7.0` 이미지를 privileged sensor로 실행
+2. 커널 BTF와 eBPF base sensor attach 확인
+3. monitor-only TracingPolicy 적용
+4. 실제 `security_file_permission` event를 정상 intent와 자동 연결
+5. 정책 거부 직후 발생시킨 실제 `process_exec`를 Critical mismatch로 탐지
+
+Tetragon만 커널 관측을 위해 privileged로 실행됩니다. Agent Gateway와 MCP 컨테이너는 계속 non-root, read-only, `cap_drop: ALL` 상태입니다. 검증 후 센서를 중지하려면 `-StopSensor`를 사용합니다.
+
 ## Tetragon adapter
 
 Linux/Kubernetes에서 [`deploy/tetragon/runtime-observation.yaml`](deploy/tetragon/runtime-observation.yaml)을 적용하고 Tetragon JSONL을 adapter에 전달합니다.
@@ -113,11 +133,12 @@ kubectl apply -f deploy/tetragon/runtime-observation.yaml
 
 export RUNTIME_SENSOR_HMAC_KEY='<same key as agent-api>'
 tetra getevents -o json | python sensor/tetragon_adapter.py \
-  --intent-id '<gateway-event-id>' \
+  --container-alias '<docker-id>=arsl-mcp-server' \
+  --container-name arsl-mcp-server \
   --gateway http://127.0.0.1:8080
 ```
 
-자세한 커널 요구사항, 신뢰 경계와 운영 한계는 [Phase 3 문서](docs/PHASE3.md)를 참고하세요.
+`--intent-id`는 선택 사항입니다. 생략하면 Gateway가 container identity와 15초 event window로 자동 correlation합니다. 자세한 실센서 증거와 한계는 [Phase 4 문서](docs/PHASE4.md)를 참고하세요.
 
 ## Security controls
 
@@ -136,9 +157,10 @@ tetra getevents -o json | python sensor/tetragon_adapter.py \
 ```powershell
 docker compose config --quiet
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps1
 ```
 
-검증 스크립트는 OPA 5개 정책 테스트, Python 보안 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. 같은 검증은 GitHub Actions에서 실행됩니다.
+기본 검증은 OPA 5개 정책 테스트, Agent API 14개와 adapter 5개 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. 별도 Phase 4 검증은 실제 커널 event 2종을 확인합니다. GitHub Actions에서는 권한 제한 때문에 결정론적 기본 검증만 실행합니다.
 
 ## Tech stack
 
@@ -147,7 +169,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
 | FastAPI | Agent gateway, intent ledger, correlation API |
 | MCP Python SDK | 격리된 tool server |
 | Open Policy Agent 1.17 | Rego 기반 tool policy |
-| Tetragon 1.7 compatible JSON | eBPF runtime telemetry adapter |
+| Tetragon 1.7.0 | 실제 eBPF process/file/network runtime telemetry |
 | OCSF 1.8 | API Activity, AI Operation, Detection Finding |
 | OpenTelemetry + Jaeger 2.18 | Agent/tool distributed tracing |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
@@ -159,7 +181,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
 - [x] OCSF 1.8 AI Operation evidence
 - [x] Intent / runtime mismatch detection
 - [x] Signed Tetragon JSON adapter
-- [ ] Linux/Kubernetes 실센서 end-to-end 캡처 자동화
+- [x] Docker Desktop WSL2 실센서 end-to-end 캡처 자동화
+- [ ] Kind/Kubernetes Runtime Hook과 pod identity correlation
 - [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [ ] Local LLM indirect prompt injection 재현
 - [ ] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑

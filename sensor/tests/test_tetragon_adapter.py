@@ -1,6 +1,6 @@
 import unittest
 
-from sensor.tetragon_adapter import normalize_tetragon_event
+from sensor.tetragon_adapter import normalize_tetragon_event, parse_container_aliases
 
 
 class TetragonAdapterTests(unittest.TestCase):
@@ -14,9 +14,12 @@ class TetragonAdapterTests(unittest.TestCase):
                 }
             },
         }
-        result = normalize_tetragon_event(event, "intent-1")
+        result = normalize_tetragon_event(
+            event, "intent-1", {"container-123": "arsl-mcp-server"}
+        )
         self.assertEqual(result["event_type"], "process_exec")
         self.assertEqual(result["target"], "/bin/sh")
+        self.assertEqual(result["container"], "arsl-mcp-server")
 
     def test_normalizes_file_kprobe(self) -> None:
         event = {
@@ -32,6 +35,30 @@ class TetragonAdapterTests(unittest.TestCase):
 
     def test_ignores_unmapped_event(self) -> None:
         self.assertIsNone(normalize_tetragon_event({"process_exit": {}}, "intent-1"))
+
+    def test_intent_id_is_optional_for_automatic_gateway_correlation(self) -> None:
+        event = {
+            "time": "2026-07-24T00:00:00Z",
+            "process_kprobe": {
+                "function_name": "security_file_permission",
+                "process": {
+                    "binary": "/usr/local/bin/python",
+                    "docker": "8af6ee7b969e6318e5a261f85ee2a03",
+                },
+                "args": [{"file_arg": {"path": "/app/documents/public/guide.txt"}}],
+            },
+        }
+        result = normalize_tetragon_event(
+            event,
+            None,
+            {"8af6ee7b969e": "arsl-mcp-server"},
+        )
+        self.assertNotIn("intent_id", result)
+        self.assertEqual(result["container"], "arsl-mcp-server")
+
+    def test_rejects_short_or_malformed_container_alias(self) -> None:
+        with self.assertRaisesRegex(ValueError, "12\+"):
+            parse_container_aliases(["short=arsl-mcp-server"])
 
 
 if __name__ == "__main__":

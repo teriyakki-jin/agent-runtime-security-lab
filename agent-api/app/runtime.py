@@ -46,8 +46,11 @@ def _timestamp(value: Any) -> str:
 class RuntimeMonitor:
     """Correlate policy intent with kernel/runtime sensor observations."""
 
-    def __init__(self, max_records: int = 200) -> None:
+    def __init__(
+        self, max_records: int = 200, auto_correlation_window_seconds: float = 15.0
+    ) -> None:
         self.max_records = max_records
+        self.auto_correlation_window_seconds = auto_correlation_window_seconds
         self.intents: dict[str, dict[str, Any]] = {}
         self.observations: deque[dict[str, Any]] = deque(maxlen=max_records)
         self.findings: deque[dict[str, Any]] = deque(maxlen=max_records)
@@ -60,6 +63,7 @@ class RuntimeMonitor:
         actor: str,
         policy_action: str,
         executed: bool,
+        container: str = "arsl-mcp-server",
     ) -> dict[str, Any]:
         expected_events: list[str] = []
         expected_target_prefix: str | None = None
@@ -74,6 +78,7 @@ class RuntimeMonitor:
             "tool": tool,
             "policy_action": policy_action,
             "executed": executed,
+            "container": container,
             "expected_event_types": expected_events,
             "expected_target_prefix": expected_target_prefix,
         }
@@ -88,21 +93,47 @@ class RuntimeMonitor:
             raise ValueError(f"Unsupported runtime event type: {event_type}")
 
         target = str(raw_observation.get("target", ""))[:512]
+        supplied_intent_id = str(raw_observation.get("intent_id", ""))[:64]
         observation = {
             "observation_id": str(raw_observation.get("observation_id") or uuid4()),
             "timestamp": _timestamp(raw_observation.get("timestamp")),
-            "intent_id": str(raw_observation.get("intent_id", ""))[:64],
+            "intent_id": supplied_intent_id,
             "source": str(raw_observation.get("source", "unknown"))[:32],
             "event_type": event_type,
             "process": str(raw_observation.get("process", "unknown"))[:256],
             "target": target,
             "target_fingerprint": _fingerprint(target),
             "container": str(raw_observation.get("container", "unknown"))[:128],
+            "correlation_method": "explicit" if supplied_intent_id else "none",
+            "correlation_delta_ms": None,
         }
+        if not supplied_intent_id:
+            correlated = self._auto_correlate(observation)
+            if correlated:
+                observation["intent_id"], delta_ms = correlated
+                observation["correlation_method"] = "container_time_window"
+                observation["correlation_delta_ms"] = delta_ms
         self.observations.appendleft(observation)
         finding = self._analyze(observation)
         self.findings.appendleft(finding)
         return finding
+
+    def _auto_correlate(
+        self, observation: dict[str, Any]
+    ) -> tuple[str, int] | None:
+        observed_at = datetime.fromisoformat(observation["timestamp"])
+        candidates: list[tuple[float, str]] = []
+        for intent in reversed(list(self.intents.values())):
+            if intent["container"] != observation["container"]:
+                continue
+            intent_at = datetime.fromisoformat(intent["timestamp"])
+            delta = (observed_at - intent_at).total_seconds()
+            if -1.0 <= delta <= self.auto_correlation_window_seconds:
+                candidates.append((abs(delta), intent["intent_id"]))
+        if not candidates:
+            return None
+        delta, intent_id = min(candidates)
+        return intent_id, round(delta * 1000)
 
     def _analyze(self, observation: dict[str, Any]) -> dict[str, Any]:
         intent = self.intents.get(observation["intent_id"])
@@ -200,3 +231,20 @@ class RuntimeMonitor:
 
     def finding_list(self) -> list[dict[str, Any]]:
         return list(self.findings)
+
+    def status(self) -> dict[str, Any]:
+        source_counts: dict[str, int] = {}
+        auto_correlated = 0
+        for observation in self.observations:
+            source = observation["source"]
+            source_counts[source] = source_counts.get(source, 0) + 1
+            if observation["correlation_method"] == "container_time_window":
+                auto_correlated += 1
+        latest = self.observations[0]["timestamp"] if self.observations else None
+        return {
+            "sensor_mode": "tetragon" if source_counts.get("tetragon") else "simulator",
+            "last_observation_at": latest,
+            "source_counts": source_counts,
+            "auto_correlated": auto_correlated,
+            "correlation_window_seconds": self.auto_correlation_window_seconds,
+        }

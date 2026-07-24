@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import unittest
+from datetime import datetime, timedelta
 
 from app.runtime import RuntimeMonitor, canonical_sensor_payload, verify_sensor_signature
 
@@ -70,6 +71,44 @@ class RuntimeMonitorTests(unittest.TestCase):
                 "target": "/app/documents/public/guide.txt",
                 "container": "arsl-mcp-server", "timestamp": "not-a-time",
             })
+
+    def test_container_and_time_window_auto_correlate_without_intent_id(self) -> None:
+        self.register(executed=True)
+        intent_time = datetime.fromisoformat(
+            self.monitor.intents["intent-1"]["timestamp"]
+        )
+        finding = self.monitor.ingest({
+            "source": "tetragon", "event_type": "file_access",
+            "process": "/usr/local/bin/python",
+            "target": "/app/documents/public/guide.txt",
+            "container": "arsl-mcp-server",
+            "timestamp": (intent_time + timedelta(milliseconds=80)).isoformat(),
+        })
+        self.assertTrue(finding["matched"])
+        self.assertEqual(finding["intent_id"], "intent-1")
+        self.assertEqual(
+            finding["observation"]["correlation_method"],
+            "container_time_window",
+        )
+        self.assertLess(finding["observation"]["correlation_delta_ms"], 100)
+        status = self.monitor.status()
+        self.assertEqual(status["sensor_mode"], "tetragon")
+        self.assertEqual(status["auto_correlated"], 1)
+
+    def test_observation_outside_window_stays_orphan(self) -> None:
+        self.register(executed=True)
+        intent_time = datetime.fromisoformat(
+            self.monitor.intents["intent-1"]["timestamp"]
+        )
+        finding = self.monitor.ingest({
+            "source": "tetragon", "event_type": "file_access",
+            "process": "/usr/local/bin/python",
+            "target": "/app/documents/public/guide.txt",
+            "container": "arsl-mcp-server",
+            "timestamp": (intent_time + timedelta(seconds=30)).isoformat(),
+        })
+        self.assertEqual(finding["finding_type"], "orphan_runtime_activity")
+        self.assertEqual(finding["observation"]["correlation_method"], "none")
 
 
 class SensorSignatureTests(unittest.TestCase):

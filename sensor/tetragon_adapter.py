@@ -28,22 +28,38 @@ def _process(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _container_alias(container_id: str, aliases: dict[str, str]) -> str:
+    matches = [
+        (prefix, name)
+        for prefix, name in aliases.items()
+        if container_id.startswith(prefix) or prefix.startswith(container_id)
+    ]
+    if not matches:
+        return container_id or "unknown"
+    return max(matches, key=lambda item: len(item[0]))[1]
+
+
 def normalize_tetragon_event(
-    event: dict[str, Any], intent_id: str
+    event: dict[str, Any],
+    intent_id: str | None,
+    container_aliases: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
+    aliases = container_aliases or {}
     timestamp = event.get("time")
     if "process_exec" in event:
         data = event["process_exec"]
         identity = _process(data)
-        return {
-            "intent_id": intent_id,
+        payload = {
             "source": "tetragon",
             "timestamp": timestamp,
             "event_type": "process_exec",
             "process": identity["process"],
             "target": identity["process"],
-            "container": identity["container"],
+            "container": _container_alias(identity["container"], aliases),
         }
+        if intent_id:
+            payload["intent_id"] = intent_id
+        return payload
 
     data = event.get("process_kprobe")
     if not isinstance(data, dict):
@@ -69,15 +85,17 @@ def normalize_tetragon_event(
     else:
         return None
 
-    return {
-        "intent_id": intent_id,
+    payload = {
         "source": "tetragon",
         "timestamp": timestamp,
         "event_type": event_type,
         "process": identity["process"],
         "target": target,
-        "container": identity["container"],
+        "container": _container_alias(identity["container"], aliases),
     }
+    if intent_id:
+        payload["intent_id"] = intent_id
+    return payload
 
 
 def canonical_payload(payload: dict[str, Any]) -> bytes:
@@ -103,7 +121,16 @@ def submit(payload: dict[str, Any], gateway: str, secret: str) -> None:
 
 
 def process_stream(
-    stream: TextIO, *, intent_id: str, gateway: str, secret: str, dry_run: bool
+    stream: TextIO,
+    *,
+    intent_id: str | None,
+    gateway: str,
+    secret: str,
+    dry_run: bool,
+    container_aliases: dict[str, str] | None = None,
+    container_name: str | None = None,
+    include_event_types: set[str] | None = None,
+    max_events: int = 0,
 ) -> int:
     submitted = 0
     for line_number, line in enumerate(stream, start=1):
@@ -114,22 +141,59 @@ def process_stream(
         except json.JSONDecodeError as exc:
             print(f"line {line_number}: invalid JSON: {exc}", file=sys.stderr)
             continue
-        payload = normalize_tetragon_event(event, intent_id)
+        payload = normalize_tetragon_event(event, intent_id, container_aliases)
         if payload is None:
+            continue
+        if container_name and payload["container"] != container_name:
+            continue
+        if include_event_types and payload["event_type"] not in include_event_types:
             continue
         if dry_run:
             print(canonical_payload(payload).decode())
         else:
             submit(payload, gateway, secret)
         submitted += 1
+        if max_events and submitted >= max_events:
+            break
     return submitted
+
+
+def parse_container_aliases(values: list[str]) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for value in values:
+        prefix, separator, name = value.partition("=")
+        if not separator or len(prefix) < 12 or not name:
+            raise ValueError(
+                "Container aliases must use a Docker ID prefix of 12+ characters: ID=name"
+            )
+        aliases[prefix] = name
+    return aliases
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--intent-id", required=True, help="Gateway intent/event ID")
+    parser.add_argument(
+        "--intent-id",
+        help="Optional gateway intent ID; omit for container/time auto-correlation",
+    )
     parser.add_argument("--input", default="-", help="Tetragon JSONL file or - for stdin")
     parser.add_argument("--gateway", default="http://127.0.0.1:8080")
+    parser.add_argument(
+        "--container-alias",
+        action="append",
+        default=[],
+        metavar="ID=NAME",
+        help="Map a Tetragon Docker ID prefix to the gateway container name",
+    )
+    parser.add_argument("--container-name", help="Only submit events for this container")
+    parser.add_argument(
+        "--include-event-type",
+        action="append",
+        choices=["process_exec", "file_access", "network_connect"],
+    )
+    parser.add_argument(
+        "--max-events", type=int, default=0, help="Stop after N submitted events"
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -137,22 +201,32 @@ def main() -> int:
     if not args.dry_run and len(secret) < 32:
         parser.error("RUNTIME_SENSOR_HMAC_KEY must contain at least 32 characters")
 
+    try:
+        aliases = parse_container_aliases(args.container_alias)
+    except ValueError as exc:
+        parser.error(str(exc))
+    event_types = set(args.include_event_type or [])
+
+    common = {
+        "intent_id": args.intent_id,
+        "gateway": args.gateway,
+        "secret": secret,
+        "dry_run": args.dry_run,
+        "container_aliases": aliases,
+        "container_name": args.container_name,
+        "include_event_types": event_types,
+        "max_events": max(0, args.max_events),
+    }
     if args.input == "-":
         count = process_stream(
             sys.stdin,
-            intent_id=args.intent_id,
-            gateway=args.gateway,
-            secret=secret,
-            dry_run=args.dry_run,
+            **common,
         )
     else:
         with open(args.input, encoding="utf-8") as stream:
             count = process_stream(
                 stream,
-                intent_id=args.intent_id,
-                gateway=args.gateway,
-                secret=secret,
-                dry_run=args.dry_run,
+                **common,
             )
     print(f"normalized observations: {count}", file=sys.stderr)
     return 0
