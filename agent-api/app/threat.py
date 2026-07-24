@@ -79,6 +79,15 @@ KUBERNETES_PRIVILEGE_ESCALATION_ATTACKS: list[dict[str, Any]] = [
     },
 ]
 
+OAUTH_ACCESS_TOKEN_ATTACK: dict[str, Any] = {
+    "tactic": {"uid": "TA0008", "name": "Lateral Movement"},
+    "technique": {
+        "uid": "T1550.001",
+        "name": "Application Access Token",
+        "src_url": "https://attack.mitre.org/techniques/T1550/001/",
+    },
+}
+
 
 def classify_finding(finding: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Return deterministic threat-framework mappings for an alertable finding."""
@@ -96,6 +105,11 @@ def classify_finding(finding: dict[str, Any]) -> dict[str, list[dict[str, Any]]]
         return {
             "owasp_agentic": [deepcopy(OWASP_AGENTIC_2026["ASI03"])],
             "mitre_attacks": deepcopy(KUBERNETES_PRIVILEGE_ESCALATION_ATTACKS),
+        }
+    if finding["finding_type"] == "mcp_oauth_scope_violation":
+        return {
+            "owasp_agentic": [deepcopy(OWASP_AGENTIC_2026["ASI03"])],
+            "mitre_attacks": [deepcopy(OAUTH_ACCESS_TOKEN_ATTACK)],
         }
     if finding["finding_type"] == "orphan_runtime_activity":
         owasp_ids.append("ASI10")

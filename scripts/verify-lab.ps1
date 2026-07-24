@@ -116,6 +116,13 @@ docker compose exec -T mcp-server python -m unittest discover -s /app/tests -v
 if ($LASTEXITCODE -ne 0) {
     throw 'MCP server unit tests failed.'
 }
+docker compose exec -T auth-server python -m unittest discover -s /app/tests -v
+if ($LASTEXITCODE -ne 0) {
+    throw 'OAuth authorization server unit tests failed.'
+}
+
+Write-Host 'Running OAuth 2.1 MCP scope validation'
+& (Join-Path $PSScriptRoot 'verify-oauth.ps1')
 
 Write-Host 'Running intent-to-runtime correlation scenarios'
 $RuntimeExpectations = [ordered]@{

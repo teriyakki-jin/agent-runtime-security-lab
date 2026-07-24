@@ -22,12 +22,36 @@ services:
       - agent_net
     restart: unless-stopped
 
+  auth-server:
+    build:
+      context: ./auth-server
+    container_name: arsl-auth-server
+    environment:
+      OAUTH_ISSUER: http://auth-server:9000
+      MCP_RESOURCE: http://mcp-server:8000/mcp
+      MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+    ports:
+      - "127.0.0.1:19000:9000"
+    networks:
+      - agent_net
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
   mcp-server:
     build:
       context: ./mcp-server
     container_name: arsl-mcp-server
     environment:
       APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
+      OAUTH_ISSUER: http://auth-server:9000
+      OAUTH_JWKS_URL: http://auth-server:9000/jwks.json
+      MCP_RESOURCE: http://mcp-server:8000/mcp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: mcp-tool-server
     expose:
@@ -35,6 +59,7 @@ services:
     networks:
       - agent_net
     depends_on:
+      - auth-server
       - jaeger
     read_only: true
     tmpfs:
@@ -52,6 +77,9 @@ services:
     environment:
       APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
       RUNTIME_SENSOR_HMAC_KEY: ${RUNTIME_SENSOR_HMAC_KEY:-}
+      MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+      MCP_OAUTH_TOKEN_URL: http://auth-server:9000/token
+      MCP_RESOURCE: http://mcp-server:8000/mcp
       APPROVAL_TTL_SECONDS: 300
       MCP_SERVER_URL: http://mcp-server:8000/mcp
       OPA_DECISION_URL: http://opa:8181/v1/data/agent_security/decision
@@ -62,6 +90,7 @@ services:
     networks:
       - agent_net
     depends_on:
+      - auth-server
       - jaeger
       - mcp-server
       - opa

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.capability import argument_fingerprint, issue_capability
 from app.ocsf import to_ocsf_api_activity, to_ocsf_detection_finding
+from app.oauth import ServiceTokenProvider
 from app.runtime import RuntimeMonitor, verify_sensor_signature
 
 
@@ -33,6 +34,11 @@ OPA_DECISION_URL = os.getenv(
     "OPA_DECISION_URL", "http://opa:8181/v1/data/agent_security/decision"
 )
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://mcp-server:8000/mcp")
+MCP_TOOL_SCOPES = {
+    "read_document": "mcp:read_document",
+    "mock_http_request": "mcp:mock_http_request",
+    "run_command": "mcp:run_command",
+}
 MAX_ARGUMENT_BYTES = 4096
 MAX_SENSOR_PAYLOAD_BYTES = 16384
 MAX_APPROVAL_RECORDS = 200
@@ -172,15 +178,16 @@ async def lifespan(_: FastAPI):
         raise RuntimeError("RUNTIME_SENSOR_HMAC_KEY must contain at least 32 characters.")
     async with httpx.AsyncClient(timeout=10.0) as client:
         app.state.http_client = client
+        app.state.oauth_tokens = ServiceTokenProvider(client)
         yield
 
 
 app = FastAPI(
     title="Agent Runtime Security Lab",
-    version="0.8.0",
+    version="0.9.0",
     description=(
         "Policy-enforced MCP gateway with eBPF, Kubernetes identity, and "
-        "audit/RBAC attack-chain correlation."
+        "audit/RBAC correlation and OAuth-scoped MCP access."
     ),
     lifespan=lifespan,
 )
@@ -236,14 +243,25 @@ async def evaluate_policy(invocation: ToolInvocation) -> PolicyDecision:
 
 async def invoke_mcp_tool(tool: str, arguments: dict[str, Any]) -> list[str]:
     try:
-        async with streamable_http_client(MCP_SERVER_URL) as streams:
-            read_stream, write_stream, _ = streams
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                result = await session.call_tool(tool, arguments=arguments)
-                if result.isError:
-                    raise ValueError("MCP tool returned an error.")
-                return [item.text for item in result.content if isinstance(item, TextContent)]
+        required_scope = MCP_TOOL_SCOPES.get(tool)
+        if not required_scope:
+            raise ValueError("No OAuth scope is registered for the requested MCP tool.")
+        token = await app.state.oauth_tokens.get_token([required_scope])
+        async with httpx.AsyncClient(
+            headers={"Authorization": f"Bearer {token}"}, timeout=30.0
+        ) as mcp_http_client:
+            async with streamable_http_client(
+                MCP_SERVER_URL, http_client=mcp_http_client
+            ) as streams:
+                read_stream, write_stream, _ = streams
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool, arguments=arguments)
+                    if result.isError:
+                        raise ValueError("MCP tool returned an error.")
+                    return [
+                        item.text for item in result.content if isinstance(item, TextContent)
+                    ]
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"MCP tool call failed: {exc}") from exc
 
@@ -351,7 +369,7 @@ async def dashboard() -> FileResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "agent-gateway", "version": "0.8.0"}
+    return {"status": "ok", "service": "agent-gateway", "version": "0.9.0"}
 
 
 @app.get("/api/scenarios")

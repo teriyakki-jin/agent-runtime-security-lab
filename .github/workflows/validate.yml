@@ -26,6 +26,8 @@ jobs:
           python -m compileall -q agent-api/tests
           python -m compileall -q mcp-server/app
           python -m compileall -q mcp-server/tests
+          python -m compileall -q auth-server/app
+          python -m compileall -q auth-server/tests
           python -m compileall -q sensor
           python -m compileall -q detection
           python -m compileall -q kubernetes
@@ -40,6 +42,7 @@ jobs:
           python -m json.tool docs/evidence/phase6-threat-detection.json > /dev/null
           python -m json.tool docs/evidence/phase7-kubernetes-identity.json > /dev/null
           python -m json.tool docs/evidence/phase8-kubernetes-audit-chain.json > /dev/null
+          python -m json.tool docs/evidence/phase9-mcp-oauth.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elastic/detection-rules/agent-runtime-rules.json > /dev/null
@@ -85,6 +88,16 @@ jobs:
           phase8 = json.loads(Path("docs/evidence/phase8-kubernetes-audit-chain.json").read_text())
           assert phase8["finding"]["mitre_attack"] == ["T1098.006", "T1610"]
           assert not any(phase8["privacy"].values())
+          phase9 = json.loads(Path("docs/evidence/phase9-mcp-oauth.json").read_text(encoding="utf-8-sig"))
+          assert phase9["result"] == "passed"
+          assert phase9["token_exported"] is False
+          assert all(phase9["checks"].values())
+          assert phase9["finding"]["threat"]["mitre_attacks"][0]["technique"]["uid"] == "T1550.001"
+          oauth_server = Path("auth-server/app/main.py").read_text()
+          mcp_oauth = Path("mcp-server/app/oauth.py").read_text()
+          assert 'code_challenge_method != "S256"' in oauth_server
+          assert 'audience=MCP_RESOURCE' in mcp_oauth
+          assert 'algorithms=["RS256"]' in mcp_oauth
           PY
 
       - name: Validate OPA policies

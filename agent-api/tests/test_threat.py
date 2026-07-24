@@ -73,3 +73,11 @@ class ThreatMappingTests(unittest.TestCase):
             [item["technique"]["uid"] for item in result["mitre_attacks"]],
             ["T1098.006", "T1610"],
         )
+
+    def test_oauth_scope_violation_maps_identity_and_access_token_abuse(self) -> None:
+        result = classify_finding(
+            finding("oauth_token_use", finding_type="mcp_oauth_scope_violation")
+        )
+
+        self.assertEqual(result["owasp_agentic"][0]["uid"], "ASI03")
+        self.assertEqual(result["mitre_attacks"][0]["technique"]["uid"], "T1550.001")

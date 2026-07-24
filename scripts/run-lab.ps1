@@ -36,20 +36,31 @@ if (-not $env:RUNTIME_SENSOR_HMAC_KEY) {
     }
     $env:RUNTIME_SENSOR_HMAC_KEY = [Convert]::ToBase64String($SensorKeyBytes)
 }
+if (-not $env:MCP_OAUTH_CLIENT_SECRET) {
+    $OAuthSecretBytes = New-Object byte[] 32
+    $OAuthRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $OAuthRandom.GetBytes($OAuthSecretBytes)
+    } finally {
+        $OAuthRandom.Dispose()
+    }
+    $env:MCP_OAUTH_CLIENT_SECRET = [Convert]::ToBase64String($OAuthSecretBytes)
+}
 docker compose up -d --build
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose startup failed.'
 }
 
-Write-Host '[3/4] Waiting for OPA and the agent gateway'
+Write-Host '[3/4] Waiting for OPA, OAuth, and the agent gateway'
 $Deadline = (Get-Date).AddMinutes(3)
 $Ready = $false
 do {
     Start-Sleep -Seconds 3
     try {
         $Opa = Invoke-RestMethod 'http://127.0.0.1:8181/health?plugins' -TimeoutSec 3
+        $OAuth = Invoke-RestMethod 'http://127.0.0.1:19000/health' -TimeoutSec 3
         $Agent = Invoke-RestMethod 'http://127.0.0.1:8080/health' -TimeoutSec 3
-        $Ready = $Agent.status -eq 'ok'
+        $Ready = $Agent.status -eq 'ok' -and $OAuth.status -eq 'ok'
     } catch {
         $Ready = $false
     }
@@ -65,3 +76,4 @@ Write-Host '[4/4] Running security verification'
 Write-Host 'Agent API : http://127.0.0.1:8080/docs'
 Write-Host 'Jaeger UI : http://127.0.0.1:16686'
 Write-Host 'OPA API   : http://127.0.0.1:8181'
+Write-Host 'OAuth AS  : http://127.0.0.1:19000'

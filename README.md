@@ -2,7 +2,9 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 8 — Kubernetes Audit/RBAC Attack Chain**
+> Current: **Phase 9 — OAuth 2.1 MCP Authorization & Tool Scope**
+
+![Phase 9 OAuth security validation](docs/screenshots/phase9-mcp-oauth-scopes.png)
 
 ![Phase 8 Kubernetes audit attack chain](docs/screenshots/phase8-audit-attack-chain.png)
 
@@ -15,6 +17,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 6: Detection-as-Code & Threat Mapping](docs/PHASE6.md)
 - [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
 - [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
+- [Phase 9: OAuth 2.1 MCP Authorization & Tool Scope](docs/PHASE9.md)
 
 ## Why this project
 
@@ -30,6 +33,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - Jaeger에서 `invoke_agent`와 `execute_tool` span 추적
 - ES|QL detection-as-code로 OCSF finding을 경보화하고 OWASP Agentic 2026 / MITRE ATT&CK에 매핑
 - Kubernetes Pod UID·Namespace·ServiceAccount를 intent와 eBPF event에 바인딩해 workload identity 도용 탐지
+- OAuth 2.1 PKCE, resource audience, JWT와 도구별 scope로 MCP transport 보호
 
 ## Architecture
 
@@ -63,6 +67,8 @@ flowchart LR
     AUDIT["Kubernetes Audit Log"] --> CHAIN["RBAC Attack Chain Correlator"]
     IDENTITY --> CHAIN
     CHAIN --> FINDING
+    AS["OAuth Authorization Server"] -->|"RS256 JWT / JWKS"| MCP
+    API -->|"audience + least scope"| AS
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -225,6 +231,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps
 
 실제 검증 결과는 [Phase 8 문서](docs/PHASE8.md)와 [검증 증거](docs/evidence/phase8-kubernetes-audit-chain.json)에 기록했습니다.
 
+## Try Phase 9 — OAuth 2.1 MCP scope
+
+MCP 서버를 OAuth Protected Resource로 실행하고 PKCE, JWT audience, 도구별 scope를 실제 요청으로 검증합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-lab.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
+```
+
+- 미인증 MCP initialize는 HTTP 401
+- Authorization Code + PKCE `S256`, one-time code
+- RS256 JWT의 issuer·audience·expiry 검증
+- `read_document`, `mock_http_request`, `run_command`별 scope 분리
+- under-scoped token을 High finding으로 분류하고 OWASP ASI03 / MITRE T1550.001 매핑
+- bearer token 원문은 저장하지 않고 fingerprint만 evidence에 기록
+
+실제 검증 결과는 [Phase 9 문서](docs/PHASE9.md)와 [검증 증거](docs/evidence/phase9-mcp-oauth.json)에 기록했습니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -236,6 +260,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps
 - **Network isolation**: 관리 포트는 loopback 전용, MCP는 내부 네트워크 전용
 - **Container hardening**: non-root, read-only root filesystem, all capabilities dropped, `no-new-privileges`
 - **Fail closed**: OPA 장애 또는 잘못된 sensor signature는 요청 거부
+- **OAuth least privilege**: MCP resource audience와 도구별 scope를 모두 만족해야 실행
 
 ## Validation
 
@@ -247,9 +272,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 ```
 
-기본 검증은 OPA 5개 정책 테스트, Agent API 27개, sensor 8개, Kubernetes attack-chain 4개 단위 테스트와 정책 시나리오, 승인/replay 방어, runtime correlation, OCSF 비식별화를 확인합니다. Phase 4는 실제 커널 event, Phase 5/6는 SOC와 detection-as-code, Phase 7은 실제 workload identity, Phase 8은 Audit/RBAC/Tetragon 공격 체인을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~8 정적 자산 검증을 실행합니다.
+기본 검증은 OPA 5개, Agent API 30개, MCP 6개, OAuth 4개, sensor 8개, detection 3개, Kubernetes attack-chain 4개 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 9는 실제 PKCE code flow와 MCP tool scope를 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~9 정적 자산 검증을 실행합니다.
 
 ## Tech stack
 
@@ -267,6 +293,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps
 | ES|QL detection pack | Versioned agent runtime rules and idempotent alerts |
 | Kind + Kubernetes 1.36 | Reproducible workload identity and ServiceAccount lab |
 | Kubernetes Audit Log | RBAC privilege escalation and API-to-runtime attack chain |
+| OAuth 2.1 + RS256 JWT | MCP protected resource, PKCE and tool scopes |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -282,7 +309,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps
 - [x] ES|QL detection-as-code와 Kibana threat dashboard
 - [x] Kind/Kubernetes Pod UID·ServiceAccount runtime correlation
 - [x] Kubernetes audit log와 RBAC privilege escalation correlation
-- [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
+- [x] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [ ] Local LLM indirect prompt injection 재현
 - [ ] Elastic native detection scheduling과 Slack/Teams alert connector
 
@@ -305,9 +332,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps
 - [Kubernetes RBAC Good Practices](https://kubernetes.io/docs/concepts/security/rbac-good-practices/)
 - [MITRE ATT&CK T1098.006](https://attack.mitre.org/techniques/T1098/006/)
 - [MITRE ATT&CK T1610](https://attack.mitre.org/techniques/T1610/)
+- [MCP Authorization Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+- [RFC 9728 Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html)
+- [RFC 8707 Resource Indicators](https://www.rfc-editor.org/rfc/rfc8707.html)
+- [MITRE ATT&CK T1550.001](https://attack.mitre.org/techniques/T1550/001/)
 
 ## Safety scope
 
 이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5/6 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS, 인증, Detection Engine 권한을 적용해야 합니다. Phase 7 Kind 클러스터는 전용 `arsl-phase7` 이름을 사용하며 테스트 workload의 ServiceAccount token automount를 비활성화합니다.
 
 Phase 8은 전용 `arsl-phase8` 클러스터와 `kubectl` impersonation만 사용하며 실제 ServiceAccount token을 발급하거나 저장하지 않습니다.
+
+Phase 9 Authorization Server는 로컬 lab 전용이며 signing key와 client secret을 실행 시 생성합니다. 발급된 bearer token과 authorization code는 Git에 저장하지 않습니다.
