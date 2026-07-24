@@ -47,7 +47,24 @@
           "properties": {
             "uid": { "type": "keyword" },
             "title": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "types": { "type": "keyword" }
+            "types": { "type": "keyword" },
+            "attacks": {
+              "properties": {
+                "tactic": {
+                  "properties": {
+                    "uid": { "type": "keyword" },
+                    "name": { "type": "keyword" }
+                  }
+                },
+                "technique": {
+                  "properties": {
+                    "uid": { "type": "keyword" },
+                    "name": { "type": "keyword" },
+                    "src_url": { "type": "keyword", "ignore_above": 512 }
+                  }
+                }
+              }
+            }
           }
         },
         "unmapped": {
@@ -66,7 +83,14 @@
                 "risk_score": { "type": "integer" },
                 "scenario_id": { "type": "keyword" },
                 "target_fingerprint": { "type": "keyword" },
-                "tool": { "type": "keyword" }
+                "tool": { "type": "keyword" },
+                "owasp_agentic": {
+                  "properties": {
+                    "uid": { "type": "keyword" },
+                    "name": { "type": "keyword" },
+                    "version": { "type": "keyword" }
+                  }
+                }
               }
             }
           }

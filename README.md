@@ -2,14 +2,15 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 5 — OCSF SOC Pipeline + Kibana Threat Hunting**
+> Current: **Phase 6 — Detection-as-Code + OWASP Agentic / MITRE ATT&CK Mapping**
 
-![Phase 5 Kibana SOC dashboard](docs/screenshots/phase5-soc-overview.png)
+![Phase 6 Kibana threat detection dashboard](docs/screenshots/phase6-threat-detection.png)
 
 - [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
 - [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
 - [Phase 4: Live Tetragon eBPF Validation](docs/PHASE4.md)
 - [Phase 5: OCSF SOC Pipeline](docs/PHASE5.md)
+- [Phase 6: Detection-as-Code & Threat Mapping](docs/PHASE6.md)
 
 ## Why this project
 
@@ -23,6 +24,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - intent와 observation이 다르면 Critical/High finding 생성
 - 원본 인자와 관측 대상을 OCSF 내보내기에서 fingerprint로 비식별화
 - Jaeger에서 `invoke_agent`와 `execute_tool` span 추적
+- ES|QL detection-as-code로 OCSF finding을 경보화하고 OWASP Agentic 2026 / MITRE ATT&CK에 매핑
 
 ## Architecture
 
@@ -46,6 +48,10 @@ flowchart LR
     FINDING -->|"OCSF Detection Finding"| LOGSTASH
     LOGSTASH --> ES["Elasticsearch"]
     ES --> KIBANA["Kibana SOC Dashboard"]
+    RULES["Versioned ES|QL Rules"] --> DETECT["Detection Runner"]
+    ES --> DETECT
+    DETECT --> ALERTS["Idempotent Alert Index"]
+    ALERTS --> THREAT["Threat Mapping Dashboard"]
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -165,6 +171,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 
 실제 검증 결과와 운영 한계는 [Phase 5 문서](docs/PHASE5.md)와 [검증 증거](docs/evidence/phase5-soc-validation.json)에 기록했습니다.
 
+## Try Phase 6 — threat detection
+
+버전 관리되는 ES|QL 규칙을 실행하고 OWASP Agentic Top 10 / MITRE ATT&CK 대시보드를 설치합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-detections.ps1
+```
+
+- Threat dashboard: <http://127.0.0.1:15601/app/dashboards#/view/arsl-threat-mapping>
+- 3 detection rules: denied process execution, network before approval, orphan runtime activity
+- 결정론적 alert ID: 반복 실행해도 동일 source/rule 경보가 중복 생성되지 않음
+
+기본 시나리오와 실 Tetragon 회귀에서 탐지 10건, Critical 8건, OWASP ASI02·ASI05·ASI10과 MITRE T1041·T1059 매핑 결과를 [Phase 6 문서](docs/PHASE6.md)와 [검증 증거](docs/evidence/phase6-threat-detection.json)에 기록했습니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -184,9 +204,10 @@ docker compose config --quiet
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.ps1
 ```
 
-기본 검증은 OPA 5개 정책 테스트, Agent API 14개와 adapter 5개 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. 별도 Phase 4 검증은 실제 커널 event 2종을 확인하고, Phase 5 검증은 Elastic 상태·UID 중복·Critical finding·개인정보 경계·ILM·Kibana saved object를 확인합니다. GitHub Actions에서는 권한과 자원 제한 때문에 결정론적 기본 검증 및 Phase 5 정적 자산 검증만 실행합니다.
+기본 검증은 OPA 5개 정책 테스트, Agent API 18개와 adapter 5개 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. Phase 4는 실제 커널 event 2종, Phase 5는 SOC 수집과 개인정보 경계, Phase 6는 ES|QL rule 3개·위협 매핑·중복 방지를 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 SOC/detection 정적 자산 검증을 실행합니다.
 
 ## Tech stack
 
@@ -201,6 +222,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 | Elasticsearch 9.4.2 | OCSF index, mapping, 7-day retention |
 | Logstash 9.4.2 | Idempotent OCSF collection and normalization |
 | Kibana 9.4.2 | SOC metrics, severity and runtime hunt dashboard |
+| ES|QL detection pack | Versioned agent runtime rules and idempotent alerts |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -212,11 +234,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 - [x] Signed Tetragon JSON adapter
 - [x] Docker Desktop WSL2 실센서 end-to-end 캡처 자동화
 - [x] OCSF Logstash pipeline, Elasticsearch 보존 정책, Kibana hunt dashboard
+- [x] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑
+- [x] ES|QL detection-as-code와 Kibana threat dashboard
 - [ ] Kind/Kubernetes Runtime Hook과 pod identity correlation
 - [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [ ] Local LLM indirect prompt injection 재현
-- [ ] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑
-- [ ] Elastic detection rule과 Slack/Teams alert connector
+- [ ] Elastic native detection scheduling과 Slack/Teams alert connector
 
 ## References
 
@@ -227,7 +250,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 - [OWASP Agentic Security Initiative](https://genai.owasp.org/initiatives/agentic-security-initiative/)
 - [Elastic Stack installation](https://www.elastic.co/guide/en/elastic-stack/current/installing-elastic-stack.html)
 - [Logstash HTTP poller](https://www.elastic.co/docs/reference/logstash/plugins/plugins-inputs-http_poller)
+- [Elastic ES|QL detection rules](https://www.elastic.co/docs/solutions/security/detect-and-alert/esql)
+- [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/)
+- [MITRE ATT&CK T1059](https://attack.mitre.org/techniques/T1059/)
 
 ## Safety scope
 
-이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS와 인증을 적용해야 합니다.
+이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5/6 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS, 인증, Detection Engine 권한을 적용해야 합니다.

@@ -3,8 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.threat import classify_finding
+
 
 OCSF_VERSION = "1.8.0"
+PRODUCT_VERSION = "0.6.0"
 OCSF_CATEGORY_UID = 6
 OCSF_CLASS_UID = 6003
 
@@ -63,7 +66,7 @@ def to_ocsf_api_activity(event: dict[str, Any]) -> dict[str, Any]:
             "product": {
                 "name": "Agent Runtime Security Lab",
                 "vendor_name": "teriyakki-jin",
-                "version": "0.4.0",
+                "version": PRODUCT_VERSION,
             },
             "uid": event["event_id"],
         },
@@ -100,6 +103,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
     event_time = datetime.fromisoformat(finding["timestamp"])
     observation = finding["observation"]
     matched = finding["matched"]
+    classification = classify_finding(finding)
     return {
         "activity_id": 1,
         "activity_name": "Create",
@@ -120,7 +124,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
             "product": {
                 "name": "Agent Runtime Security Lab",
                 "vendor_name": "teriyakki-jin",
-                "version": "0.4.0",
+                "version": PRODUCT_VERSION,
             },
             "uid": finding["finding_id"],
         },
@@ -129,6 +133,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
             "title": finding["title"],
             "desc": finding["reason"],
             "types": [finding["finding_type"]],
+            "attacks": classification["mitre_attacks"],
         },
         "analytic": {
             "name": "Agent Intent Runtime Correlator",
@@ -153,6 +158,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
                 "target_fingerprint": observation["target_fingerprint"],
                 "tool": finding["tool"],
                 "policy_action": finding["policy_action"],
+                "owasp_agentic": classification["owasp_agentic"],
             }
         },
     }

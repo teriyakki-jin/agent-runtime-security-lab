@@ -1,0 +1,84 @@
+{
+  "index_patterns": ["arsl-alerts-*"],
+  "priority": 510,
+  "version": 1,
+  "_meta": {
+    "project": "agent-runtime-security-lab",
+    "phase": 6,
+    "source": "ES|QL detection-as-code"
+  },
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "arsl-ocsf-7d"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "message": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+        "status": {"type": "keyword"},
+        "event": {
+          "properties": {
+            "kind": {"type": "keyword"},
+            "category": {"type": "keyword"},
+            "type": {"type": "keyword"}
+          }
+        },
+        "rule": {
+          "properties": {
+            "id": {"type": "keyword"},
+            "name": {"type": "keyword"},
+            "version": {"type": "integer"},
+            "severity": {"type": "keyword"},
+            "risk_score": {"type": "integer"},
+            "tags": {"type": "keyword"}
+          }
+        },
+        "source": {
+          "properties": {
+            "uid": {"type": "keyword"},
+            "document_id": {"type": "keyword"}
+          }
+        },
+        "finding": {
+          "properties": {
+            "type": {"type": "keyword"},
+            "event_type": {"type": "keyword"},
+            "policy_action": {"type": "keyword"},
+            "intent_id": {"type": "keyword"},
+            "severity": {"type": "keyword"}
+          }
+        },
+        "threat": {
+          "properties": {
+            "owasp_agentic": {
+              "properties": {
+                "uid": {"type": "keyword"},
+                "name": {"type": "keyword"},
+                "version": {"type": "keyword"}
+              }
+            },
+            "mitre_attack": {
+              "properties": {
+                "tactic": {
+                  "properties": {
+                    "uid": {"type": "keyword"},
+                    "name": {"type": "keyword"}
+                  }
+                },
+                "technique": {
+                  "properties": {
+                    "uid": {"type": "keyword"},
+                    "name": {"type": "keyword"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

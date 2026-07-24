@@ -86,4 +86,10 @@ class OcsfMappingTests(unittest.TestCase):
         self.assertEqual(result["class_uid"], 2004)
         self.assertEqual(result["metadata"]["version"], "1.8.0")
         self.assertTrue(result["is_alert"])
+        self.assertEqual(
+            result["finding_info"]["attacks"][0]["technique"]["uid"], "T1059"
+        )
+        self.assertEqual(
+            result["unmapped"]["security"]["owasp_agentic"][0]["uid"], "ASI05"
+        )
         self.assertNotIn("/bin/sh", str(result))
