@@ -46,7 +46,7 @@
       cursor: pointer;
     }
     button:hover, .link:hover { border-color: var(--cyan); }
-    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
     .metric, .panel { border: 1px solid var(--border); background: rgba(15, 23, 36, .9); border-radius: 14px; }
     .metric { padding: 18px; }
     .metric span { display: block; color: var(--muted); font: 700 11px/1 ui-monospace, monospace; text-transform: uppercase; }
@@ -56,7 +56,7 @@
     .panel.wide { grid-column: 1 / -1; }
     .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
     h2 { margin: 0; font-size: 16px; letter-spacing: -.01em; }
-    .scenario-list, .approval-list { display: grid; gap: 10px; }
+    .scenario-list, .approval-list, .runtime-list { display: grid; gap: 10px; }
     .row-card { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: #0a111c; }
     .row-card strong { display: block; font-size: 13px; }
     .row-card small { display: block; color: var(--muted); margin-top: 5px; }
@@ -65,9 +65,9 @@
     .deny { border-color: rgba(255, 102, 125, .45); color: var(--red); }
     .run { border-color: rgba(54, 215, 231, .45); color: var(--cyan); }
     .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 8px; font: 700 10px/1 ui-monospace, monospace; text-transform: uppercase; }
-    .allow, .approved { color: var(--green); background: rgba(81, 220, 144, .1); }
+    .allow, .approved, .match { color: var(--green); background: rgba(81, 220, 144, .1); }
     .review, .pending, .executing { color: var(--amber); background: rgba(255, 200, 87, .1); }
-    .deny-badge, .denied, .failed, .expired { color: var(--red); background: rgba(255, 102, 125, .1); }
+    .deny-badge, .denied, .failed, .expired, .mismatch { color: var(--red); background: rgba(255, 102, 125, .1); }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th { color: var(--muted); font: 700 10px/1 ui-monospace, monospace; text-align: left; text-transform: uppercase; }
@@ -88,13 +88,14 @@
   <main>
     <header>
       <div>
-        <div class="eyebrow">PHASE 2 · RUNTIME CONTROL PLANE</div>
+        <div class="eyebrow">PHASE 3 · INTENT / RUNTIME CORRELATION</div>
         <h1>Agent Runtime Security</h1>
-        <p class="subtitle">OPA policy decisions, human approval capabilities, OCSF 1.8 evidence, and OpenTelemetry traces in one isolated lab.</p>
+        <p class="subtitle">Correlate what an AI agent was authorized to do with what the runtime actually did. Tetragon-ready telemetry, signed sensor ingestion, and OCSF Detection Findings.</p>
       </div>
       <nav class="links">
         <a class="link" href="/docs">OpenAPI</a>
         <a class="link" href="/api/events/ocsf">OCSF JSON</a>
+        <a class="link" href="/api/runtime/ocsf">Runtime OCSF</a>
         <a class="link" href="http://127.0.0.1:16686" target="_blank" rel="noreferrer">Jaeger</a>
       </nav>
     </header>
@@ -104,6 +105,7 @@
       <article class="metric"><span>Events</span><strong id="event-count">0</strong></article>
       <article class="metric"><span>Pending</span><strong id="pending-count">0</strong></article>
       <article class="metric"><span>Blocked</span><strong id="blocked-count">0</strong></article>
+      <article class="metric"><span>Mismatches</span><strong id="mismatch-count">0</strong></article>
     </section>
 
     <section class="grid">
@@ -115,6 +117,21 @@
       <article class="panel">
         <div class="panel-head"><h2>Human approval queue</h2><button id="refresh">Refresh</button></div>
         <div class="approval-list" id="approvals"></div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-head"><h2>Intent / runtime attack lab</h2><span class="badge review">Tetragon-ready</span></div>
+        <div class="runtime-list" id="runtime-scenarios"></div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-head"><h2>Runtime correlation findings</h2><span class="badge mismatch">OCSF 2004</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Result</th><th>Severity</th><th>Tool</th><th>Observed</th><th>Source</th><th>Target hash</th></tr></thead>
+            <tbody id="runtime-findings"></tbody>
+          </table>
+        </div>
       </article>
 
       <article class="panel wide">
@@ -136,6 +153,12 @@
       indirect_prompt_injection: 'Prompt injection / path traversal',
       tool_misuse: 'Tool misuse / shell execution',
       data_exfiltration: 'External data exfiltration'
+    };
+
+    const runtimeScenarioNames = {
+      matched_file_read: 'Baseline · expected public file access',
+      denied_process_bypass: 'Mismatch · process execution after deny',
+      network_exfiltration_bypass: 'Mismatch · outbound connection before approval'
     };
 
     function toast(message) {
@@ -167,6 +190,14 @@
       } catch (error) { toast(error.message); }
     }
 
+    async function runRuntimeScenario(id) {
+      try {
+        const result = await api(`/api/runtime/scenarios/${id}`, { method: 'POST' });
+        toast(`${id}: ${result.finding.matched ? 'MATCH' : 'MISMATCH'}`);
+        await refresh();
+      } catch (error) { toast(error.message); }
+    }
+
     async function resolveApproval(id, action) {
       const resolution = action === 'approve' ? 'approved' : 'denied';
       const body = JSON.stringify({ approver: 'dashboard-reviewer', justification: `Reviewed and ${resolution} in the local security lab.` });
@@ -193,6 +224,27 @@
         button.className = 'run';
         button.textContent = 'Run';
         button.addEventListener('click', () => runScenario(id));
+        card.append(copy, button);
+        root.append(card);
+      });
+    }
+
+    function renderRuntimeScenarios(scenarios) {
+      const root = document.querySelector('#runtime-scenarios');
+      root.replaceChildren();
+      Object.entries(scenarios).forEach(([id, item]) => {
+        const card = document.createElement('div');
+        card.className = 'row-card';
+        const copy = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = runtimeScenarioNames[id] || item.title;
+        const detail = document.createElement('small');
+        detail.textContent = `${item.event_type} · ${item.base_scenario}`;
+        copy.append(title, detail);
+        const button = document.createElement('button');
+        button.className = 'run';
+        button.textContent = 'Correlate';
+        button.addEventListener('click', () => runRuntimeScenario(id));
         card.append(copy, button);
         root.append(card);
       });
@@ -260,18 +312,51 @@
       });
     }
 
+    function renderRuntimeFindings(items) {
+      const root = document.querySelector('#runtime-findings');
+      root.replaceChildren();
+      items.slice(0, 15).forEach(item => {
+        const row = document.createElement('tr');
+        const observation = item.observation;
+        const values = [
+          new Date(item.timestamp).toLocaleTimeString(),
+          item.matched ? 'match' : 'mismatch',
+          item.severity,
+          item.tool || 'unmapped',
+          observation.event_type,
+          observation.source,
+          observation.target_fingerprint
+        ];
+        values.forEach((value, index) => {
+          const cell = document.createElement('td');
+          if (index === 1) cell.append(badge(String(value)));
+          else if (index === 6) {
+            const code = document.createElement('code');
+            code.textContent = value;
+            cell.append(code);
+          } else cell.textContent = value;
+          row.append(cell);
+        });
+        root.append(row);
+      });
+    }
+
     async function refresh() {
       try {
-        const [health, scenarios, approvals, events] = await Promise.all([
-          api('/health'), api('/api/scenarios'), api('/api/approvals'), api('/api/events')
+        const [health, scenarios, approvals, events, runtimeScenarios, findings] = await Promise.all([
+          api('/health'), api('/api/scenarios'), api('/api/approvals'), api('/api/events'),
+          api('/api/runtime/scenarios'), api('/api/runtime/findings')
         ]);
         document.querySelector('#health').textContent = health.status.toUpperCase();
         document.querySelector('#event-count').textContent = events.length;
         document.querySelector('#pending-count').textContent = approvals.filter(x => x.status === 'pending').length;
         document.querySelector('#blocked-count').textContent = events.filter(x => !x.executed).length;
+        document.querySelector('#mismatch-count').textContent = findings.filter(x => !x.matched).length;
         renderScenarios(scenarios);
+        renderRuntimeScenarios(runtimeScenarios);
         renderApprovals(approvals);
         renderEvents(events);
+        renderRuntimeFindings(findings);
       } catch (error) {
         document.querySelector('#health').textContent = 'DOWN';
         toast(error.message);

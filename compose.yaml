@@ -51,6 +51,7 @@ services:
     container_name: arsl-agent-api
     environment:
       APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
+      RUNTIME_SENSOR_HMAC_KEY: ${RUNTIME_SENSOR_HMAC_KEY:-}
       APPROVAL_TTL_SECONDS: 300
       MCP_SERVER_URL: http://mcp-server:8000/mcp
       OPA_DECISION_URL: http://opa:8181/v1/data/agent_security/decision

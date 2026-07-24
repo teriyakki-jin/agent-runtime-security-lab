@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from app.ocsf import to_ocsf_api_activity
+from app.ocsf import to_ocsf_api_activity, to_ocsf_detection_finding
 
 
 class OcsfMappingTests(unittest.TestCase):
@@ -59,3 +59,31 @@ class OcsfMappingTests(unittest.TestCase):
 
         self.assertNotIn("../../etc/shadow", serialized)
         self.assertNotIn('"arguments"', serialized)
+
+    def test_runtime_mismatch_maps_to_detection_finding(self) -> None:
+        finding = {
+            "finding_id": "finding-1",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "intent_id": "intent-1",
+            "finding_type": "policy_runtime_mismatch",
+            "title": "Observed process execution after a policy deny",
+            "reason": "The policy denied execution but the sensor observed activity.",
+            "severity_id": 5,
+            "severity": "Critical",
+            "matched": False,
+            "tool": "run_command",
+            "policy_action": "deny",
+            "observation": {
+                "observation_id": "observation-1",
+                "source": "tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/sh",
+                "target_fingerprint": "0123456789abcdef",
+                "container": "arsl-mcp-server",
+            },
+        }
+        result = to_ocsf_detection_finding(finding)
+        self.assertEqual(result["class_uid"], 2004)
+        self.assertEqual(result["metadata"]["version"], "1.8.0")
+        self.assertTrue(result["is_alert"])
+        self.assertNotIn("/bin/sh", str(result))

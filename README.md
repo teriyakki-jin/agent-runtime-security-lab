@@ -1,171 +1,178 @@
 # Agent Runtime Security Lab
 
-AI Agent가 **무엇을 하려고 했는지**와 도구가 **실제로 실행됐는지**를 분리해 기록하고, MCP 도구 호출 전에 OPA 정책으로 허용·검토·차단하는 재현 가능한 Agentic AI 보안 실습 프로젝트입니다.
+AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> 현재 단계: Phase 2 — OCSF 1.8 AI Operation + Human Approval + One-time Capability
+> Current: **Phase 3 — Intent / Runtime Correlation + Tetragon Adapter**
 
-![Phase 2 security dashboard](docs/screenshots/phase2-dashboard.png)
+![Phase 3 intent and runtime correlation dashboard](docs/screenshots/phase3-runtime-correlation.png)
 
-상세 설계와 보안 불변 조건은 [Phase 2 Runtime Approval Control Plane](docs/PHASE2.md)에서 확인할 수 있습니다.
+- [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
+- [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
 
-## 왜 이 프로젝트인가
+## Why this project
 
-일반적인 AI 보안 데모는 프롬프트 문자열만 검사하거나 LLM 응답을 분류하는 데 그칩니다. 이 프로젝트는 에이전트의 도구 호출 경계에 정책을 배치하고 다음 증거를 함께 남깁니다.
+일반적인 AI 보안 데모는 프롬프트 문자열 또는 모델 응답만 검사합니다. 이 프로젝트는 판단 지점을 MCP 도구 실행 경계와 Linux 런타임까지 확장합니다.
 
-- Agent와 Tool 이름
-- 원본 인자를 저장하지 않는 SHA-256 fingerprint
-- OPA 정책 결정과 위험 점수
-- 실제 MCP 도구 실행 여부
-- OpenTelemetry `invoke_agent` / `execute_tool` trace
-- OCSF 1.8 `API Activity` + `ai_operation` profile
-- 승인 대기열과 짧은 수명의 1회성 HMAC execution capability
-- 공격 시나리오별 기대 결과와 실제 결과
+- OPA가 도구 요청을 `allow / review / deny`로 분류
+- 위험 작업은 사람의 승인과 1회성 HMAC capability 요구
+- 실행 전 agent intent를 별도 원장에 기록
+- Tetragon 이벤트를 프로세스·파일·네트워크 observation으로 정규화
+- intent와 observation이 다르면 Critical/High finding 생성
+- 원본 인자와 관측 대상을 OCSF 내보내기에서 fingerprint로 비식별화
+- Jaeger에서 `invoke_agent`와 `execute_tool` span 추적
 
-## 아키텍처
+## Architecture
 
 ```mermaid
 flowchart LR
-    TEST["Attack scenario"] --> API["Agent Gateway"]
-    API -->|"policy input"| OPA["OPA Policy Engine"]
+    TEST["Attack scenarios"] --> API["Agent Gateway"]
+    API -->|"policy input"| OPA["OPA"]
     OPA -->|"allow / review / deny"| API
-    API -->|"review"| HUMAN["Human Approval Dashboard"]
-    HUMAN -->|"approve once"| CAP["Signed Capability"]
-    API -->|"allow only"| MCP["MCP Tool Server"]
-    CAP -->|"tool + args hash + expiry"| MCP
-    API -->|"invoke_agent + execute_tool"| JAEGER["Jaeger / OpenTelemetry"]
-    API -->|"normalized evidence"| OCSF["OCSF 1.8 JSON"]
-    MCP -->|"actual tool execution"| JAEGER
-    MCP --> DOCS["Isolated documents"]
+    API --> INTENT["Intent ledger"]
+    API -->|"allow or signed approval"| MCP["MCP Tool Server"]
+    HUMAN["Human reviewer"] -->|"one-time capability"| API
+    MCP --> RUNTIME["Linux runtime"]
+    RUNTIME --> TETRAGON["Tetragon eBPF"]
+    TETRAGON --> ADAPTER["Signed JSON adapter"]
+    ADAPTER --> OBS["Runtime observations"]
+    INTENT --> CORRELATOR["Intent correlator"]
+    OBS --> CORRELATOR
+    CORRELATOR --> FINDING["OCSF Detection Finding"]
+    API --> JAEGER["Jaeger / OpenTelemetry"]
 ```
 
-관리 포트는 `127.0.0.1`에만 게시됩니다. MCP 서버는 호스트에 공개하지 않고 전용 Docker bridge 네트워크 안에서만 접근할 수 있습니다.
+기본 Compose 실습은 Windows Docker Desktop과 GitHub Actions에서도 결정론적으로 재현되도록 센서 시뮬레이터를 사용합니다. 실제 eBPF 수집은 BTF를 지원하는 Linux/Kubernetes 환경에서 선택적으로 연결합니다.
 
-## 검증 시나리오
+## Detection scenarios
 
-| 시나리오 | 요청 | 기대 결정 | 실제 실행 |
-|---|---|---|---|
-| 정상 문서 조회 | `public/guide.txt` | `allow` | 실행 |
-| 간접 Prompt Injection | `../../etc/shadow` | `deny` | 실행 안 함 |
-| Tool Misuse | `run_command: id` | `deny` | 실행 안 함 |
-| 데이터 반출 | 외부 URL 요청 | `review` | 승인 후 네트워크 전송 없이 모의 실행 |
+| Layer | Scenario | Policy intent | Runtime observation | Result |
+|---|---|---|---|---|
+| Policy | Public document read | `allow` | MCP execution | Allowed |
+| Policy | `../../etc/shadow` path traversal | `deny` | None | Blocked |
+| Policy | Shell tool misuse | `deny` | None | Blocked |
+| Approval | External transfer request | `review` | None until approval | Pending |
+| Runtime | Public document file access | `allow + file_access` | Expected path | Match |
+| Runtime | Process execution after deny | No runtime activity | `process_exec` | Critical mismatch |
+| Runtime | Network connection before approval | No runtime activity | `network_connect` | Critical mismatch |
+| Runtime | Observation without intent | No matching intent | Any event | High orphan finding |
 
-정책을 우회해 MCP 서버를 직접 호출하더라도 서버가 경로 탈출, 외부 HTTP, 실제 셸 실행을 다시 차단하도록 방어 계층을 중복 적용했습니다.
+## Quick start
 
-## 빠른 시작
+Requirements:
 
-요구 사항:
-
-- Windows 10/11 + WSL2
-- Docker Desktop과 Docker Compose
-- PowerShell 5.1 이상
-
-전체 빌드·실행·검증:
+- Windows 10/11 + WSL2 or Linux
+- Docker Desktop / Docker Engine with Compose
+- PowerShell 5.1+
 
 ```powershell
 Set-Location D:\develop\agent-runtime-security-lab
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-lab.ps1
 ```
 
-접속 주소:
+Services:
 
-- Security Dashboard: <http://127.0.0.1:8080>
-- Agent API: <http://127.0.0.1:8080/docs>
-- Jaeger UI: <http://127.0.0.1:16686>
-- OPA API: <http://127.0.0.1:8181>
+- Security dashboard: <http://127.0.0.1:8080>
+- OpenAPI: <http://127.0.0.1:8080/docs>
+- Runtime OCSF: <http://127.0.0.1:8080/api/runtime/ocsf>
+- Jaeger: <http://127.0.0.1:16686>
+- OPA: <http://127.0.0.1:8181>
 
-## API 사용 예시
+MCP는 호스트 포트를 공개하지 않으며 전용 Docker bridge 안에서만 접근됩니다.
 
-정의된 공격 시나리오 실행:
+## Try Phase 3
+
+정상 file observation과 intent를 비교합니다.
 
 ```powershell
 Invoke-RestMethod `
     -Method Post `
-    -Uri http://127.0.0.1:8080/api/scenarios/indirect_prompt_injection
+    -Uri http://127.0.0.1:8080/api/runtime/scenarios/matched_file_read
 ```
 
-임의 도구 호출 정책 평가:
+정책이 거부한 뒤 프로세스가 실행된 우회 상황을 재현합니다.
 
 ```powershell
-$Body = @{
-    tool = 'read_document'
-    arguments = @{ path = 'public/guide.txt' }
-} | ConvertTo-Json
-
 Invoke-RestMethod `
     -Method Post `
-    -Uri http://127.0.0.1:8080/api/invoke `
-    -ContentType 'application/json' `
-    -Body $Body
+    -Uri http://127.0.0.1:8080/api/runtime/scenarios/denied_process_bypass
 ```
 
-최근 보안 이벤트 확인:
-
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8080/api/events
+Invoke-RestMethod http://127.0.0.1:8080/api/runtime/intents
+Invoke-RestMethod http://127.0.0.1:8080/api/runtime/observations
+Invoke-RestMethod http://127.0.0.1:8080/api/runtime/findings
+Invoke-RestMethod http://127.0.0.1:8080/api/runtime/ocsf
 ```
 
-승인 대기열과 OCSF 1.8 이벤트 확인:
+## Tetragon adapter
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8080/api/approvals
-Invoke-RestMethod http://127.0.0.1:8080/api/events/ocsf
+Linux/Kubernetes에서 [`deploy/tetragon/runtime-observation.yaml`](deploy/tetragon/runtime-observation.yaml)을 적용하고 Tetragon JSONL을 adapter에 전달합니다.
+
+```bash
+kubectl apply -f deploy/tetragon/runtime-observation.yaml
+
+export RUNTIME_SENSOR_HMAC_KEY='<same key as agent-api>'
+tetra getevents -o json | python sensor/tetragon_adapter.py \
+  --intent-id '<gateway-event-id>' \
+  --gateway http://127.0.0.1:8080
 ```
 
-`review` 응답의 `approval.approval_id`를 대시보드 또는 `/api/approvals/{id}/approve`로 승인할 수 있습니다. capability는 도구 이름, 인자 fingerprint, approval ID, 만료 시각에 암호학적으로 바인딩되며 MCP 서버에서 한 번만 소비됩니다.
+자세한 커널 요구사항, 신뢰 경계와 운영 한계는 [Phase 3 문서](docs/PHASE3.md)를 참고하세요.
 
-## 정책 테스트
+## Security controls
+
+- **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
+- **Human in the loop**: 외부 전송은 자동 실행 대신 승인 대기
+- **One-time capability**: 도구·인자 fingerprint·approval ID·만료 시각을 HMAC으로 바인딩하고 재사용 차단
+- **Sensor authenticity**: observation 본문 전체를 별도 HMAC 키로 검증
+- **Runtime correlation**: 허가되지 않은 process/network/file 행동 탐지
+- **Privacy by design**: OCSF에는 원본 인자와 target 대신 SHA-256 fingerprint 기록
+- **Network isolation**: 관리 포트는 loopback 전용, MCP는 내부 네트워크 전용
+- **Container hardening**: non-root, read-only root filesystem, all capabilities dropped, `no-new-privileges`
+- **Fail closed**: OPA 장애 또는 잘못된 sensor signature는 요청 거부
+
+## Validation
 
 ```powershell
-docker compose exec -T opa opa test /policies -v
+docker compose config --quiet
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
 ```
 
-검증은 단순 HTTP 200 여부가 아니라 각 시나리오의 결정, 위험 점수, 실행 여부, 승인 capability 서명, 인자 재바인딩 방지, 만료, 재사용 차단과 OCSF 원문 비노출을 대조합니다.
+검증 스크립트는 OPA 5개 정책 테스트, Python 보안 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. 같은 검증은 GitHub Actions에서 실행됩니다.
 
-## 보안 설계
+## Tech stack
 
-- Default deny: 정의되지 않은 도구는 기본 차단
-- 최소 권한: `public/` 문서만 읽기 허용
-- Human in the loop: 외부 전송은 자동 실행 대신 `review`
-- One-time capability: 승인 토큰은 HMAC 서명, 5분 TTL, 도구·인자 fingerprint 바인딩, MCP 측 재사용 차단
-- Sensitive data minimization: trace에는 인자 원문 대신 fingerprint 기록
-- Defense in depth: Gateway와 MCP 서버가 각각 입력 검증
-- Bounded memory: 이벤트와 승인 레코드는 각각 최대 200개, 만료된 승인 원본 인자는 메모리에서 제거
-- Network isolation: 관리 포트는 localhost 전용, MCP는 컨테이너 네트워크에서만 접근
-- Non-root container: Python 서비스는 UID/GID `65532`로 실행
-- Container hardening: 읽기 전용 root filesystem, Linux capability 전체 제거, `no-new-privileges` 적용
-
-## 기술 스택
-
-| 구성 요소 | 버전/역할 |
+| Component | Role |
 |---|---|
-| MCP Python SDK | `1.27.2`, Streamable HTTP 도구 서버/클라이언트 |
-| Open Policy Agent | `1.17.0`, Rego 기반 도구 실행 정책 |
-| OpenTelemetry | Agent/Tool span과 보안 속성 |
-| Jaeger | `2.18.0`, trace 검색과 시각화 |
-| OCSF | `1.8.0`, API Activity + AI Operation profile |
-| FastAPI | 정책 적용 Agent Gateway API |
-| Docker Compose | 격리된 재현 환경 |
+| FastAPI | Agent gateway, intent ledger, correlation API |
+| MCP Python SDK | 격리된 tool server |
+| Open Policy Agent 1.17 | Rego 기반 tool policy |
+| Tetragon 1.7 compatible JSON | eBPF runtime telemetry adapter |
+| OCSF 1.8 | API Activity, AI Operation, Detection Finding |
+| OpenTelemetry + Jaeger 2.18 | Agent/tool distributed tracing |
+| Docker Compose | 격리·재현 가능한 로컬 환경 |
 
-## 다음 단계
+## Roadmap
 
-- [ ] Tetragon eBPF로 프로세스·파일·네트워크 실제 행위 수집
-- [ ] Agent 의도와 커널 행위의 semantic-runtime mismatch 탐지
-- [x] OCSF 1.8 형식의 보안 이벤트 정규화
-- [ ] OAuth 2.1 기반 MCP 인증과 도구별 scope
-- [ ] Ollama 로컬 모델을 이용한 실제 간접 Prompt Injection 재현
-- [ ] 공격별 OWASP Agentic Top 10 / MITRE ATT&CK 매핑
-- [x] 위험 작업 승인 UI와 일회성 실행 capability
-- [ ] 대시보드와 포트폴리오 스크린샷
+- [x] OPA 기반 allow/review/deny policy
+- [x] Human approval + one-time capability
+- [x] OCSF 1.8 AI Operation evidence
+- [x] Intent / runtime mismatch detection
+- [x] Signed Tetragon JSON adapter
+- [ ] Linux/Kubernetes 실센서 end-to-end 캡처 자동화
+- [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
+- [ ] Local LLM indirect prompt injection 재현
+- [ ] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑
+- [ ] Elasticsearch/Kibana 장기 보관과 hunt dashboard
 
-## 참고 자료
+## References
 
-- [OWASP Agentic Security Initiative](https://genai.owasp.org/initiatives/agentic-security-initiative/)
+- [Tetragon installation and requirements](https://tetragon.io/docs/installation/)
+- [Tetragon TracingPolicy](https://tetragon.io/docs/concepts/tracing-policy/)
+- [OCSF schema](https://github.com/ocsf/ocsf-schema)
 - [MCP Security Best Practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices)
-- [OpenTelemetry GenAI Semantic Conventions](https://github.com/open-telemetry/semantic-conventions/releases)
-- [Tetragon Policy Enforcement](https://tetragon.io/docs/getting-started/enforcement/)
-- [Open Cybersecurity Schema Framework](https://ocsf.io/)
+- [OWASP Agentic Security Initiative](https://genai.owasp.org/initiatives/agentic-security-initiative/)
 
-## 안전 범위
+## Safety scope
 
-이 프로젝트는 로컬 격리 환경의 방어 연구용입니다. 공격 시나리오는 실제 자격 증명이나 외부 시스템을 사용하지 않으며, HTTP 전송과 셸 실행 도구는 의도적으로 무해하게 구현되어 있습니다.
+이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다.

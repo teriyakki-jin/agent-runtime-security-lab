@@ -63,7 +63,7 @@ def to_ocsf_api_activity(event: dict[str, Any]) -> dict[str, Any]:
             "product": {
                 "name": "Agent Runtime Security Lab",
                 "vendor_name": "teriyakki-jin",
-                "version": "0.2.0",
+                "version": "0.3.0",
             },
             "uid": event["event_id"],
         },
@@ -90,6 +90,67 @@ def to_ocsf_api_activity(event: dict[str, Any]) -> dict[str, Any]:
                 "policy_reasons": event["decision"]["reasons"],
                 "risk_score": event["decision"]["risk_score"],
                 "scenario_id": event.get("scenario_id"),
+            }
+        },
+    }
+
+
+def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
+    """Map intent/runtime correlation results to OCSF 1.8 Detection Finding."""
+    event_time = datetime.fromisoformat(finding["timestamp"])
+    observation = finding["observation"]
+    matched = finding["matched"]
+    return {
+        "activity_id": 1,
+        "activity_name": "Create",
+        "category_uid": 2,
+        "category_name": "Findings",
+        "class_uid": 2004,
+        "class_name": "Detection Finding",
+        "type_uid": 200401,
+        "time": int(event_time.timestamp() * 1000),
+        "severity_id": finding["severity_id"],
+        "severity": finding["severity"],
+        "status_id": 2 if matched else 1,
+        "status": "Resolved" if matched else "New",
+        "is_alert": not matched,
+        "message": finding["title"],
+        "metadata": {
+            "version": OCSF_VERSION,
+            "product": {
+                "name": "Agent Runtime Security Lab",
+                "vendor_name": "teriyakki-jin",
+                "version": "0.3.0",
+            },
+            "uid": finding["finding_id"],
+        },
+        "finding_info": {
+            "uid": finding["finding_id"],
+            "title": finding["title"],
+            "desc": finding["reason"],
+            "types": [finding["finding_type"]],
+        },
+        "analytic": {
+            "name": "Agent Intent Runtime Correlator",
+            "type_id": 1,
+            "type": "Rule",
+        },
+        "resources": [
+            {
+                "name": observation["container"],
+                "type": "Container",
+            }
+        ],
+        "unmapped": {
+            "security": {
+                "intent_id": finding["intent_id"],
+                "matched": matched,
+                "observation_id": observation["observation_id"],
+                "observation_source": observation["source"],
+                "event_type": observation["event_type"],
+                "target_fingerprint": observation["target_fingerprint"],
+                "tool": finding["tool"],
+                "policy_action": finding["policy_action"],
             }
         },
     }

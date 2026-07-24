@@ -26,6 +26,16 @@ if (-not $env:APPROVAL_HMAC_KEY) {
     }
     $env:APPROVAL_HMAC_KEY = [Convert]::ToBase64String($KeyBytes)
 }
+if (-not $env:RUNTIME_SENSOR_HMAC_KEY) {
+    $SensorKeyBytes = New-Object byte[] 32
+    $SensorRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $SensorRandom.GetBytes($SensorKeyBytes)
+    } finally {
+        $SensorRandom.Dispose()
+    }
+    $env:RUNTIME_SENSOR_HMAC_KEY = [Convert]::ToBase64String($SensorKeyBytes)
+}
 docker compose up -d --build
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose startup failed.'

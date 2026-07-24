@@ -24,6 +24,10 @@ jobs:
           python -m compileall -q agent-api/tests
           python -m compileall -q mcp-server/app
           python -m compileall -q mcp-server/tests
+          python -m compileall -q sensor
+
+      - name: Test Tetragon event adapter
+        run: python -m unittest discover -s sensor/tests -v
 
       - name: Validate OPA policies
         run: |
