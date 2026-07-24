@@ -168,9 +168,36 @@ services:
       retries: 30
     restart: unless-stopped
 
+  local-llm:
+    image: ghcr.io/ggml-org/llama.cpp@sha256:4f02c560799a1569be08b0183d52b94b0d4a6e4b88f52f20562d2334c73837d4
+    container_name: arsl-local-llm
+    profiles: ["llm"]
+    command:
+      - --hf-repo
+      - ${ARSL_LLM_MODEL:-Qwen/Qwen3-0.6B-GGUF:Q8_0}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --ctx-size
+      - "2048"
+      - --n-predict
+      - "256"
+      - --jinja
+      - --api-key
+      - ${ARSL_LLM_API_KEY:-local-lab-only}
+    ports:
+      - "127.0.0.1:${ARSL_LLM_PORT:-18081}:8080"
+    volumes:
+      - llm-model-cache:/root/.cache/huggingface
+    networks:
+      - agent_net
+    restart: unless-stopped
+
 networks:
   agent_net:
     driver: bridge
 
 volumes:
   elasticsearch-data:
+  llm-model-cache:

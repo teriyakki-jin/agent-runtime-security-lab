@@ -19,6 +19,7 @@ jobs:
         run: |
           docker compose config --quiet
           docker compose --profile soc config --quiet
+          docker compose --profile llm config --quiet
 
       - name: Compile Python sources
         run: |
@@ -43,6 +44,7 @@ jobs:
           python -m json.tool docs/evidence/phase7-kubernetes-identity.json > /dev/null
           python -m json.tool docs/evidence/phase8-kubernetes-audit-chain.json > /dev/null
           python -m json.tool docs/evidence/phase9-mcp-oauth.json > /dev/null
+          python -m json.tool docs/evidence/phase10-local-llm-injection.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elastic/detection-rules/agent-runtime-rules.json > /dev/null
@@ -98,6 +100,19 @@ jobs:
           assert 'code_challenge_method != "S256"' in oauth_server
           assert 'audience=MCP_RESOURCE' in mcp_oauth
           assert 'algorithms=["RS256"]' in mcp_oauth
+          phase10 = json.loads(Path("docs/evidence/phase10-local-llm-injection.json").read_text())
+          assert phase10["result"] == "passed"
+          assert all(phase10["checks"].values())
+          assert phase10["model"]["runtime"] == "llama.cpp"
+          assert len(phase10["model"]["sha256"]) == 64
+          assert phase10["inference"]["raw_prompt_exported"] is False
+          assert phase10["inference"]["raw_model_response_exported"] is False
+          assert phase10["finding"]["owasp_agentic"] == ["ASI01"]
+          assert phase10["finding"]["mitre_atlas"] == ["AML.T0051"]
+          assert all(not decision["executed"] for decision in phase10["tool_decisions"])
+          guard = Path("agent-api/app/prompt_guard.py").read_text()
+          assert 'normalize("NFKC"' in guard
+          assert Path("agent-api/fixtures/untrusted/quarterly-report.txt").is_file()
           PY
 
       - name: Validate OPA policies

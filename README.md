@@ -2,7 +2,11 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 9 — OAuth 2.1 MCP Authorization & Tool Scope**
+> Current: **Phase 10 — Local LLM Indirect Prompt Injection Defense**
+
+![Phase 10 local LLM prompt injection validation](docs/screenshots/phase10-local-llm-injection.png)
+
+> Previous: **Phase 9 — OAuth 2.1 MCP Authorization & Tool Scope**
 
 ![Phase 9 OAuth security validation](docs/screenshots/phase9-mcp-oauth-scopes.png)
 
@@ -18,6 +22,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
 - [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
 - [Phase 9: OAuth 2.1 MCP Authorization & Tool Scope](docs/PHASE9.md)
+- [Phase 10: Local LLM Indirect Prompt Injection Defense](docs/PHASE10.md)
 
 ## Why this project
 
@@ -69,6 +74,9 @@ flowchart LR
     CHAIN --> FINDING
     AS["OAuth Authorization Server"] -->|"RS256 JWT / JWKS"| MCP
     API -->|"audience + least scope"| AS
+    DOC["Untrusted external document"] --> LLM["Local Qwen3 / llama.cpp"]
+    LLM -->|"proposed tool call"| PG["Prompt provenance guard"]
+    PG -->|"deny tainted action"| FINDING
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -248,6 +256,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 - bearer token 원문은 저장하지 않고 fingerprint만 evidence에 기록
 
 실제 검증 결과는 [Phase 9 문서](docs/PHASE9.md)와 [검증 증거](docs/evidence/phase9-mcp-oauth.json)에 기록했습니다.
+
+## Try Phase 10 — local LLM prompt injection
+
+An actual local Qwen3 model processes an untrusted document containing an indirect prompt injection. The intentionally vulnerable path produces a tool-call proposal; the provenance-aware guard blocks it before execution and exports only fingerprints.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-llm-injection.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-llm.ps1
+```
+
+- CPU-only `llama.cpp` runtime with `Qwen3-0.6B-GGUF:Q8_0`
+- loopback-only model API and isolated Docker network
+- Unicode NFKC normalization and weighted injection signals
+- taint propagation from untrusted source to proposed tool arguments
+- tool execution hard-disabled in the experiment harness
+- OWASP Agentic ASI01 / OWASP LLM01:2025 / MITRE ATLAS AML.T0051 mapping
+- raw prompt, model response, document, and URL excluded from evidence
+
+See the [Phase 10 report](docs/PHASE10.md) and [sanitized evidence](docs/evidence/phase10-local-llm-injection.json).
 
 ## Security controls
 
