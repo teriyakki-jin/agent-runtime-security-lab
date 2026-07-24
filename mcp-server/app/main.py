@@ -11,6 +11,8 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from app.capability import consume_capability
+
 
 def configure_tracing() -> trace.Tracer:
     provider = TracerProvider(
@@ -61,15 +63,31 @@ def read_document(path: str) -> str:
 
 
 @mcp.tool()
-def mock_http_request(url: str) -> dict[str, str | int]:
-    """Return a deterministic response for the allowlisted documentation host."""
+def mock_http_request(url: str, capability: str = "") -> dict[str, str | int]:
+    """Return an isolated response; external destinations require signed approval."""
     with tracer.start_as_current_span("execute_tool mock_http_request") as span:
         span.set_attribute("gen_ai.operation.name", "execute_tool")
         span.set_attribute("gen_ai.tool.name", "mock_http_request")
-        if not url.startswith("https://docs.example.local/"):
-            raise ValueError("The MCP server independently blocks external destinations.")
-        span.set_attribute("server.address", "docs.example.local")
-        return {"status": 200, "url": url, "body": "isolated documentation response"}
+        if url.startswith("https://docs.example.local/"):
+            span.set_attribute("server.address", "docs.example.local")
+            return {
+                "status": 200,
+                "url": url,
+                "body": "isolated documentation response",
+            }
+
+        approval_id = consume_capability(
+            capability,
+            "mock_http_request",
+            {"url": url},
+        )
+        span.set_attribute("security.approval.id", approval_id)
+        span.set_attribute("security.network.mode", "simulation_only")
+        return {
+            "status": 202,
+            "url": url,
+            "body": "approved external request simulated; no network traffic was sent",
+        }
 
 
 @mcp.tool()

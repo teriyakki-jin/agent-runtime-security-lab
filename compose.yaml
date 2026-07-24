@@ -27,10 +27,11 @@ services:
       context: ./mcp-server
     container_name: arsl-mcp-server
     environment:
+      APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: mcp-tool-server
-    ports:
-      - "127.0.0.1:8001:8000"
+    expose:
+      - "8000"
     networks:
       - agent_net
     depends_on:
@@ -49,6 +50,8 @@ services:
       context: ./agent-api
     container_name: arsl-agent-api
     environment:
+      APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
+      APPROVAL_TTL_SECONDS: 300
       MCP_SERVER_URL: http://mcp-server:8000/mcp
       OPA_DECISION_URL: http://opa:8181/v1/data/agent_security/decision
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317

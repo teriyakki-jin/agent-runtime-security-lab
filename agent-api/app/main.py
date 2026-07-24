@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import json
 import os
 from collections import deque
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import TextContent
@@ -21,12 +24,18 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field, model_validator
 
+from app.capability import argument_fingerprint, issue_capability
+from app.ocsf import to_ocsf_api_activity
+
 
 OPA_DECISION_URL = os.getenv(
     "OPA_DECISION_URL", "http://opa:8181/v1/data/agent_security/decision"
 )
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://mcp-server:8000/mcp")
 MAX_ARGUMENT_BYTES = 4096
+MAX_APPROVAL_RECORDS = 200
+APPROVAL_TTL_SECONDS = int(os.getenv("APPROVAL_TTL_SECONDS", "300"))
+DASHBOARD_PATH = Path(__file__).parent / "static" / "index.html"
 
 
 def configure_tracing() -> trace.Tracer:
@@ -101,8 +110,37 @@ class PolicyDecision(BaseModel):
     reasons: list[str]
 
 
+class ApprovalAction(BaseModel):
+    approver: str = Field(min_length=2, max_length=64)
+    justification: str = Field(min_length=8, max_length=500)
+
+
+@dataclass
+class ApprovalRecord:
+    approval_id: str
+    event_id: str
+    invocation: ToolInvocation | None
+    tool: str
+    actor: str
+    argument_keys: list[str]
+    argument_fingerprint: str
+    policy_decision: PolicyDecision
+    requested_at: datetime
+    expires_at: datetime
+    status: str = "pending"
+    approver: str | None = None
+    justification: str | None = None
+    resolved_at: datetime | None = None
+
+
+approvals: dict[str, ApprovalRecord] = {}
+approval_lock = asyncio.Lock()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if len(os.getenv("APPROVAL_HMAC_KEY", "")) < 32:
+        raise RuntimeError("APPROVAL_HMAC_KEY must contain at least 32 characters.")
     async with httpx.AsyncClient(timeout=10.0) as client:
         app.state.http_client = client
         yield
@@ -110,15 +148,38 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Agent Runtime Security Lab",
-    version="0.1.0",
-    description="Policy-enforced MCP tool gateway with OpenTelemetry evidence.",
+    version="0.2.0",
+    description="Policy-enforced MCP gateway with human approval and OCSF evidence.",
     lifespan=lifespan,
 )
 
 
-def argument_fingerprint(arguments: dict[str, Any]) -> str:
-    payload = json.dumps(arguments, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(payload).hexdigest()[:16]
+def approval_view(record: ApprovalRecord) -> dict[str, Any]:
+    return {
+        "approval_id": record.approval_id,
+        "event_id": record.event_id,
+        "status": record.status,
+        "tool": record.tool,
+        "actor": record.actor,
+        "argument_keys": record.argument_keys,
+        "argument_fingerprint": record.argument_fingerprint,
+        "risk_score": record.policy_decision.risk_score,
+        "reasons": record.policy_decision.reasons,
+        "requested_at": record.requested_at.isoformat(),
+        "expires_at": record.expires_at.isoformat(),
+        "approver": record.approver,
+        "justification": record.justification,
+        "resolved_at": record.resolved_at.isoformat() if record.resolved_at else None,
+    }
+
+
+def expire_pending_approvals() -> None:
+    now = datetime.now(UTC)
+    for record in approvals.values():
+        if record.status == "pending" and record.expires_at <= now:
+            record.status = "expired"
+            record.resolved_at = now
+            record.invocation = None
 
 
 async def evaluate_policy(invocation: ToolInvocation) -> PolicyDecision:
@@ -155,6 +216,31 @@ async def invoke_mcp_tool(tool: str, arguments: dict[str, Any]) -> list[str]:
         raise HTTPException(status_code=502, detail=f"MCP tool call failed: {exc}") from exc
 
 
+def build_event(
+    event_id: str,
+    invocation: ToolInvocation,
+    decision: PolicyDecision,
+    executed: bool,
+    output: list[str],
+    approval_id: str | None = None,
+    approver: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "event_id": event_id,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "actor": invocation.actor,
+        "approver": approver,
+        "scenario_id": invocation.scenario_id,
+        "tool": invocation.tool,
+        "argument_keys": sorted(invocation.arguments.keys()),
+        "argument_fingerprint": argument_fingerprint(invocation.arguments),
+        "decision": decision.model_dump(),
+        "approval_id": approval_id,
+        "executed": executed,
+        "output": output,
+    }
+
+
 async def process_invocation(invocation: ToolInvocation) -> dict[str, Any]:
     event_id = str(uuid4())
     with tracer.start_as_current_span("invoke_agent lab-security-agent") as agent_span:
@@ -182,25 +268,51 @@ async def process_invocation(invocation: ToolInvocation) -> dict[str, Any]:
                 output = await invoke_mcp_tool(invocation.tool, invocation.arguments)
                 executed = True
 
-    event = {
-        "event_id": event_id,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "actor": invocation.actor,
-        "scenario_id": invocation.scenario_id,
-        "tool": invocation.tool,
-        "argument_keys": sorted(invocation.arguments.keys()),
-        "argument_fingerprint": argument_fingerprint(invocation.arguments),
-        "decision": decision.model_dump(),
-        "executed": executed,
-        "output": output,
-    }
+    approval_id: str | None = None
+    if decision.action == "review" and not decision.allow:
+        approval_id = str(uuid4())
+        requested_at = datetime.now(UTC)
+        record = ApprovalRecord(
+            approval_id=approval_id,
+            event_id=event_id,
+            invocation=invocation.model_copy(deep=True),
+            tool=invocation.tool,
+            actor=invocation.actor,
+            argument_keys=sorted(invocation.arguments.keys()),
+            argument_fingerprint=argument_fingerprint(invocation.arguments),
+            policy_decision=decision,
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(seconds=APPROVAL_TTL_SECONDS),
+        )
+        async with approval_lock:
+            expire_pending_approvals()
+            while len(approvals) >= MAX_APPROVAL_RECORDS:
+                oldest_id = next(iter(approvals))
+                del approvals[oldest_id]
+            approvals[approval_id] = record
+
+    event = build_event(
+        event_id,
+        invocation,
+        decision,
+        executed,
+        output,
+        approval_id=approval_id,
+    )
+    if approval_id:
+        event["approval"] = approval_view(approvals[approval_id])
     events.appendleft(event)
     return event
 
 
+@app.get("/", include_in_schema=False)
+async def dashboard() -> FileResponse:
+    return FileResponse(DASHBOARD_PATH)
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "agent-gateway"}
+    return {"status": "ok", "service": "agent-gateway", "version": "0.2.0"}
 
 
 @app.get("/api/scenarios")
@@ -234,3 +346,121 @@ async def invoke_tool(invocation: ToolInvocation) -> dict[str, Any]:
 @app.get("/api/events")
 async def list_events() -> list[dict[str, Any]]:
     return list(events)
+
+
+@app.get("/api/events/ocsf")
+async def list_ocsf_events() -> list[dict[str, Any]]:
+    return [to_ocsf_api_activity(event) for event in events]
+
+
+@app.get("/api/approvals")
+async def list_approvals() -> list[dict[str, Any]]:
+    async with approval_lock:
+        expire_pending_approvals()
+        return [approval_view(record) for record in reversed(approvals.values())]
+
+
+@app.post("/api/approvals/{approval_id}/approve")
+async def approve_invocation(
+    approval_id: str, action: ApprovalAction
+) -> dict[str, Any]:
+    async with approval_lock:
+        expire_pending_approvals()
+        record = approvals.get(approval_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Unknown approval request.")
+        if record.status != "pending" or record.invocation is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Approval request is already {record.status}.",
+            )
+        record.status = "executing"
+        record.approver = action.approver
+        record.justification = action.justification
+        invocation = record.invocation.model_copy(deep=True)
+        expires_at = int(record.expires_at.timestamp())
+
+    try:
+        capability = issue_capability(
+            invocation.tool,
+            invocation.arguments,
+            approval_id,
+            expires_at,
+        )
+        approved_arguments = dict(invocation.arguments)
+        approved_arguments["capability"] = capability
+        with tracer.start_as_current_span("human_approved_tool_execution") as span:
+            span.set_attribute("security.approval.id", approval_id)
+            span.set_attribute("security.approver", action.approver)
+            output = await invoke_mcp_tool(invocation.tool, approved_arguments)
+    except Exception:
+        async with approval_lock:
+            record.status = "failed"
+            record.resolved_at = datetime.now(UTC)
+            record.invocation = None
+        raise
+
+    decision = PolicyDecision(
+        allow=True,
+        action="allow",
+        risk_score=record.policy_decision.risk_score,
+        reasons=["A human approved the pending tool invocation."],
+    )
+    event = build_event(
+        str(uuid4()),
+        invocation,
+        decision,
+        True,
+        output,
+        approval_id=approval_id,
+        approver=action.approver,
+    )
+    events.appendleft(event)
+
+    async with approval_lock:
+        record.status = "approved"
+        record.resolved_at = datetime.now(UTC)
+        record.invocation = None
+        view = approval_view(record)
+    return {"approval": view, "execution": event}
+
+
+@app.post("/api/approvals/{approval_id}/deny")
+async def deny_invocation(
+    approval_id: str, action: ApprovalAction
+) -> dict[str, Any]:
+    async with approval_lock:
+        expire_pending_approvals()
+        record = approvals.get(approval_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Unknown approval request.")
+        if record.status != "pending" or record.invocation is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Approval request is already {record.status}.",
+            )
+        invocation = record.invocation.model_copy(deep=True)
+        record.status = "denied"
+        record.approver = action.approver
+        record.justification = action.justification
+        record.resolved_at = datetime.now(UTC)
+        record.invocation = None
+        view = approval_view(record)
+
+    decision = PolicyDecision(
+        allow=False,
+        action="deny",
+        risk_score=record.policy_decision.risk_score,
+        reasons=["A human denied the pending tool invocation."],
+    )
+    event = build_event(
+        str(uuid4()),
+        invocation,
+        decision,
+        False,
+        [],
+        approval_id=approval_id,
+        approver=action.approver,
+    )
+    events.appendleft(event)
+    return {"approval": view, "execution": event}

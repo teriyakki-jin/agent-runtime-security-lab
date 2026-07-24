@@ -21,7 +21,9 @@ jobs:
       - name: Compile Python sources
         run: |
           python -m compileall -q agent-api/app
+          python -m compileall -q agent-api/tests
           python -m compileall -q mcp-server/app
+          python -m compileall -q mcp-server/tests
 
       - name: Validate OPA policies
         run: |

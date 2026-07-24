@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Runtime Security Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b12;
+      --panel: #0f1724;
+      --panel-2: #131f30;
+      --border: #25364d;
+      --text: #e8f0fb;
+      --muted: #8da2ba;
+      --cyan: #36d7e7;
+      --green: #51dc90;
+      --amber: #ffc857;
+      --red: #ff667d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at 85% 0%, rgba(54, 215, 231, .12), transparent 30rem),
+        radial-gradient(circle at 5% 30%, rgba(81, 220, 144, .08), transparent 26rem),
+        var(--bg);
+      color: var(--text);
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 64px; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 28px; }
+    .eyebrow { color: var(--cyan); font: 700 12px/1.2 ui-monospace, monospace; letter-spacing: .16em; }
+    h1 { margin: 8px 0 6px; font-size: clamp(28px, 5vw, 52px); line-height: 1; letter-spacing: -.04em; }
+    .subtitle { margin: 0; color: var(--muted); max-width: 700px; }
+    .links { display: flex; gap: 10px; flex-wrap: wrap; }
+    a, button { color: inherit; }
+    .link, button {
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      border-radius: 9px;
+      padding: 9px 12px;
+      text-decoration: none;
+      font: 700 12px/1 ui-monospace, monospace;
+      cursor: pointer;
+    }
+    button:hover, .link:hover { border-color: var(--cyan); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .metric, .panel { border: 1px solid var(--border); background: rgba(15, 23, 36, .9); border-radius: 14px; }
+    .metric { padding: 18px; }
+    .metric span { display: block; color: var(--muted); font: 700 11px/1 ui-monospace, monospace; text-transform: uppercase; }
+    .metric strong { display: block; margin-top: 10px; font-size: 28px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .panel { padding: 20px; overflow: hidden; }
+    .panel.wide { grid-column: 1 / -1; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+    h2 { margin: 0; font-size: 16px; letter-spacing: -.01em; }
+    .scenario-list, .approval-list { display: grid; gap: 10px; }
+    .row-card { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: #0a111c; }
+    .row-card strong { display: block; font-size: 13px; }
+    .row-card small { display: block; color: var(--muted); margin-top: 5px; }
+    .actions { display: flex; gap: 7px; flex-shrink: 0; }
+    .approve { border-color: rgba(81, 220, 144, .45); color: var(--green); }
+    .deny { border-color: rgba(255, 102, 125, .45); color: var(--red); }
+    .run { border-color: rgba(54, 215, 231, .45); color: var(--cyan); }
+    .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 8px; font: 700 10px/1 ui-monospace, monospace; text-transform: uppercase; }
+    .allow, .approved { color: var(--green); background: rgba(81, 220, 144, .1); }
+    .review, .pending, .executing { color: var(--amber); background: rgba(255, 200, 87, .1); }
+    .deny-badge, .denied, .failed, .expired { color: var(--red); background: rgba(255, 102, 125, .1); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { color: var(--muted); font: 700 10px/1 ui-monospace, monospace; text-align: left; text-transform: uppercase; }
+    th, td { padding: 11px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td code { color: var(--cyan); }
+    .empty { color: var(--muted); padding: 18px 2px; font-size: 13px; }
+    #toast { position: fixed; right: 20px; bottom: 20px; max-width: 380px; padding: 13px 15px; border: 1px solid var(--border); background: #111c2a; border-radius: 10px; opacity: 0; transform: translateY(10px); transition: .2s; pointer-events: none; }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 800px) {
+      header { align-items: start; flex-direction: column; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .panel.wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">PHASE 2 · RUNTIME CONTROL PLANE</div>
+        <h1>Agent Runtime Security</h1>
+        <p class="subtitle">OPA policy decisions, human approval capabilities, OCSF 1.8 evidence, and OpenTelemetry traces in one isolated lab.</p>
+      </div>
+      <nav class="links">
+        <a class="link" href="/docs">OpenAPI</a>
+        <a class="link" href="/api/events/ocsf">OCSF JSON</a>
+        <a class="link" href="http://127.0.0.1:16686" target="_blank" rel="noreferrer">Jaeger</a>
+      </nav>
+    </header>
+
+    <section class="metrics">
+      <article class="metric"><span>Gateway</span><strong id="health">...</strong></article>
+      <article class="metric"><span>Events</span><strong id="event-count">0</strong></article>
+      <article class="metric"><span>Pending</span><strong id="pending-count">0</strong></article>
+      <article class="metric"><span>Blocked</span><strong id="blocked-count">0</strong></article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head"><h2>Attack scenarios</h2><span class="badge review">live</span></div>
+        <div class="scenario-list" id="scenarios"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><h2>Human approval queue</h2><button id="refresh">Refresh</button></div>
+        <div class="approval-list" id="approvals"></div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-head"><h2>Security evidence</h2><span class="badge allow">OCSF 1.8</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Tool</th><th>Action</th><th>Risk</th><th>Executed</th><th>Fingerprint</th></tr></thead>
+            <tbody id="events"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+  <div id="toast"></div>
+
+  <script>
+    const scenarioNames = {
+      safe_document: 'Safe document read',
+      indirect_prompt_injection: 'Prompt injection / path traversal',
+      tool_misuse: 'Tool misuse / shell execution',
+      data_exfiltration: 'External data exfiltration'
+    };
+
+    function toast(message) {
+      const el = document.querySelector('#toast');
+      el.textContent = message;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2600);
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, options);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function badge(value) {
+      const span = document.createElement('span');
+      span.className = `badge ${value === 'deny' ? 'deny-badge' : value}`;
+      span.textContent = value;
+      return span;
+    }
+
+    async function runScenario(id) {
+      try {
+        const result = await api(`/api/scenarios/${id}`, { method: 'POST' });
+        toast(`${id}: ${result.decision.action}`);
+        await refresh();
+      } catch (error) { toast(error.message); }
+    }
+
+    async function resolveApproval(id, action) {
+      const resolution = action === 'approve' ? 'approved' : 'denied';
+      const body = JSON.stringify({ approver: 'dashboard-reviewer', justification: `Reviewed and ${resolution} in the local security lab.` });
+      try {
+        await api(`/api/approvals/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        toast(action === 'approve' ? 'Approval approved' : 'Approval denied');
+        await refresh();
+      } catch (error) { toast(error.message); }
+    }
+
+    function renderScenarios(scenarios) {
+      const root = document.querySelector('#scenarios');
+      root.replaceChildren();
+      Object.entries(scenarios).forEach(([id, item]) => {
+        const card = document.createElement('div');
+        card.className = 'row-card';
+        const copy = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = scenarioNames[id] || item.title;
+        const detail = document.createElement('small');
+        detail.textContent = `${item.tool} · expected ${item.expected_action}`;
+        copy.append(title, detail);
+        const button = document.createElement('button');
+        button.className = 'run';
+        button.textContent = 'Run';
+        button.addEventListener('click', () => runScenario(id));
+        card.append(copy, button);
+        root.append(card);
+      });
+    }
+
+    function renderApprovals(items) {
+      const root = document.querySelector('#approvals');
+      root.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No approval requests yet. Run the exfiltration scenario.';
+        root.append(empty);
+        return;
+      }
+      items.slice(0, 8).forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'row-card';
+        const copy = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = item.tool;
+        const detail = document.createElement('small');
+        detail.textContent = `risk ${item.risk_score} · ${item.argument_fingerprint}`;
+        copy.append(title, detail, badge(item.status));
+        card.append(copy);
+        if (item.status === 'pending') {
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const approve = document.createElement('button');
+          approve.className = 'approve';
+          approve.textContent = 'Approve';
+          approve.addEventListener('click', () => resolveApproval(item.approval_id, 'approve'));
+          const deny = document.createElement('button');
+          deny.className = 'deny';
+          deny.textContent = 'Deny';
+          deny.addEventListener('click', () => resolveApproval(item.approval_id, 'deny'));
+          actions.append(approve, deny);
+          card.append(actions);
+        }
+        root.append(card);
+      });
+    }
+
+    function renderEvents(items) {
+      const root = document.querySelector('#events');
+      root.replaceChildren();
+      items.slice(0, 15).forEach(item => {
+        const row = document.createElement('tr');
+        const values = [
+          new Date(item.timestamp).toLocaleTimeString(),
+          item.tool,
+          item.decision.action,
+          item.decision.risk_score,
+          item.executed ? 'yes' : 'no',
+          item.argument_fingerprint
+        ];
+        values.forEach((value, index) => {
+          const cell = document.createElement('td');
+          if (index === 2) cell.append(badge(String(value)));
+          else if (index === 5) { const code = document.createElement('code'); code.textContent = value; cell.append(code); }
+          else cell.textContent = value;
+          row.append(cell);
+        });
+        root.append(row);
+      });
+    }
+
+    async function refresh() {
+      try {
+        const [health, scenarios, approvals, events] = await Promise.all([
+          api('/health'), api('/api/scenarios'), api('/api/approvals'), api('/api/events')
+        ]);
+        document.querySelector('#health').textContent = health.status.toUpperCase();
+        document.querySelector('#event-count').textContent = events.length;
+        document.querySelector('#pending-count').textContent = approvals.filter(x => x.status === 'pending').length;
+        document.querySelector('#blocked-count').textContent = events.filter(x => !x.executed).length;
+        renderScenarios(scenarios);
+        renderApprovals(approvals);
+        renderEvents(events);
+      } catch (error) {
+        document.querySelector('#health').textContent = 'DOWN';
+        toast(error.message);
+      }
+    }
+
+    document.querySelector('#refresh').addEventListener('click', refresh);
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

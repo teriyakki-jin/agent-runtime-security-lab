@@ -6,12 +6,26 @@ $LabRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $LabRoot
 
 Write-Host '[1/4] Checking Docker engine'
-& cmd.exe /d /c 'docker info >nul 2>&1'
-if ($LASTEXITCODE -ne 0) {
+$PreviousErrorAction = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+docker info *> $null
+$DockerInfoExitCode = $LASTEXITCODE
+$ErrorActionPreference = $PreviousErrorAction
+if ($DockerInfoExitCode -ne 0) {
     throw 'Docker Desktop is not running.'
 }
 
 Write-Host '[2/4] Building and starting the lab'
+if (-not $env:APPROVAL_HMAC_KEY) {
+    $KeyBytes = New-Object byte[] 32
+    $Random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $Random.GetBytes($KeyBytes)
+    } finally {
+        $Random.Dispose()
+    }
+    $env:APPROVAL_HMAC_KEY = [Convert]::ToBase64String($KeyBytes)
+}
 docker compose up -d --build
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose startup failed.'
