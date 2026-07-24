@@ -11,6 +11,11 @@ OWASP_AGENTIC_2026: dict[str, dict[str, str]] = {
         "name": "Tool Misuse & Exploitation",
         "version": "2026",
     },
+    "ASI03": {
+        "uid": "ASI03",
+        "name": "Identity & Privilege Abuse",
+        "version": "2026",
+    },
     "ASI05": {
         "uid": "ASI05",
         "name": "Unexpected Code Execution (RCE)",
@@ -46,6 +51,15 @@ MITRE_ATTACK: dict[str, dict[str, Any]] = {
     },
 }
 
+WORKLOAD_IDENTITY_ATTACK: dict[str, Any] = {
+    "tactic": {"uid": "TA0004", "name": "Privilege Escalation"},
+    "technique": {
+        "uid": "T1078",
+        "name": "Valid Accounts",
+        "src_url": "https://attack.mitre.org/techniques/T1078/",
+    },
+}
+
 
 def classify_finding(finding: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Return deterministic threat-framework mappings for an alertable finding."""
@@ -54,6 +68,11 @@ def classify_finding(finding: dict[str, Any]) -> dict[str, list[dict[str, Any]]]
 
     event_type = finding["observation"]["event_type"]
     owasp_ids: list[str] = []
+    if finding["finding_type"] == "workload_identity_mismatch":
+        return {
+            "owasp_agentic": [deepcopy(OWASP_AGENTIC_2026["ASI03"])],
+            "mitre_attacks": [deepcopy(WORKLOAD_IDENTITY_ATTACK)],
+        }
     if finding["finding_type"] == "orphan_runtime_activity":
         owasp_ids.append("ASI10")
     if event_type == "process_exec":

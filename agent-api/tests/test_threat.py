@@ -48,3 +48,11 @@ class ThreatMappingTests(unittest.TestCase):
         result = classify_finding(finding("file_access", matched=True))
 
         self.assertEqual(result, {"owasp_agentic": [], "mitre_attacks": []})
+
+    def test_workload_identity_abuse_maps_to_asi03_and_valid_accounts(self) -> None:
+        result = classify_finding(
+            finding("process_exec", finding_type="workload_identity_mismatch")
+        )
+
+        self.assertEqual(result["owasp_agentic"][0]["uid"], "ASI03")
+        self.assertEqual(result["mitre_attacks"][0]["technique"]["uid"], "T1078")

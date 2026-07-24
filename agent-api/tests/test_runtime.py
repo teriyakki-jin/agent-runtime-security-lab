@@ -72,6 +72,18 @@ class RuntimeMonitorTests(unittest.TestCase):
                 "container": "arsl-mcp-server", "timestamp": "not-a-time",
             })
 
+    def test_tetragon_nanosecond_timestamp_is_normalized(self) -> None:
+        finding = self.monitor.ingest({
+            "source": "tetragon",
+            "event_type": "process_exec",
+            "process": "/bin/echo",
+            "target": "/bin/echo",
+            "container": "tool",
+            "timestamp": "2026-07-24T05:56:36.371965984Z",
+        })
+        timestamp = finding["observation"]["timestamp"]
+        self.assertEqual(timestamp, "2026-07-24T05:56:36.371965+00:00")
+
     def test_container_and_time_window_auto_correlate_without_intent_id(self) -> None:
         self.register(executed=True)
         intent_time = datetime.fromisoformat(
@@ -109,6 +121,111 @@ class RuntimeMonitorTests(unittest.TestCase):
         })
         self.assertEqual(finding["finding_type"], "orphan_runtime_activity")
         self.assertEqual(finding["observation"]["correlation_method"], "none")
+
+    @staticmethod
+    def workload(
+        *,
+        pod_uid: str = "pod-uid-approved",
+        service_account: str = "agent-tools",
+    ) -> dict[str, str]:
+        return {
+            "cluster": "arsl-phase7",
+            "namespace": "arsl-lab",
+            "pod_name": "approved-tool",
+            "pod_uid": pod_uid,
+            "service_account": service_account,
+            "container_name": "tool",
+        }
+
+    def test_kubernetes_identity_match_allows_expected_process(self) -> None:
+        identity = self.workload()
+        self.monitor.register_intent(
+            intent_id="k8s-intent",
+            tool="kubernetes_job",
+            actor="test-agent",
+            policy_action="allow",
+            executed=True,
+            container="tool",
+            workload_identity=identity,
+        )
+        finding = self.monitor.ingest({
+            "intent_id": "k8s-intent",
+            "source": "tetragon",
+            "event_type": "process_exec",
+            "process": "/bin/true",
+            "target": "/bin/true",
+            "container": "tool",
+            "workload_identity": identity,
+        })
+        self.assertTrue(finding["matched"])
+
+    def test_service_account_or_pod_uid_mismatch_is_critical(self) -> None:
+        self.monitor.register_intent(
+            intent_id="k8s-intent",
+            tool="kubernetes_job",
+            actor="test-agent",
+            policy_action="allow",
+            executed=True,
+            container="tool",
+            workload_identity=self.workload(),
+        )
+        observed = self.workload(
+            pod_uid="pod-uid-shadow", service_account="untrusted-runner"
+        )
+        finding = self.monitor.ingest({
+            "intent_id": "k8s-intent",
+            "source": "tetragon",
+            "event_type": "process_exec",
+            "process": "/bin/true",
+            "target": "/bin/true",
+            "container": "tool",
+            "workload_identity": observed,
+        })
+        self.assertEqual(finding["finding_type"], "workload_identity_mismatch")
+        self.assertEqual(finding["severity"], "Critical")
+
+    def test_auto_correlation_requires_the_bound_workload_identity(self) -> None:
+        identity = self.workload()
+        self.monitor.register_intent(
+            intent_id="k8s-intent",
+            tool="kubernetes_job",
+            actor="test-agent",
+            policy_action="allow",
+            executed=True,
+            container="tool",
+            workload_identity=identity,
+        )
+        intent_time = datetime.fromisoformat(
+            self.monitor.intents["k8s-intent"]["timestamp"]
+        )
+        finding = self.monitor.ingest({
+            "source": "tetragon",
+            "event_type": "process_exec",
+            "process": "/bin/true",
+            "target": "/bin/true",
+            "container": "tool",
+            "timestamp": (intent_time + timedelta(milliseconds=50)).isoformat(),
+            "workload_identity": identity,
+        })
+        self.assertTrue(finding["matched"])
+        self.assertEqual(
+            finding["observation"]["correlation_method"],
+            "kubernetes_workload_identity",
+        )
+        self.assertEqual(self.monitor.status()["identity_correlated"], 1)
+
+    def test_missing_required_workload_field_is_rejected(self) -> None:
+        identity = self.workload()
+        del identity["pod_uid"]
+        with self.assertRaisesRegex(ValueError, "pod_uid"):
+            self.monitor.ingest({
+                "source": "tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/true",
+                "target": "/bin/true",
+                "container": "tool",
+                "workload_identity": identity,
+            })
 
 
 class SensorSignatureTests(unittest.TestCase):

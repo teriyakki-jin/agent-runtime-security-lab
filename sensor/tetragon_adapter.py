@@ -10,7 +10,10 @@ import json
 import os
 import sys
 import urllib.request
+from pathlib import Path
 from typing import Any, TextIO
+
+from sensor.kubernetes_identity import load_pod_inventory
 
 
 def _process(event: dict[str, Any]) -> dict[str, Any]:
@@ -25,6 +28,28 @@ def _process(event: dict[str, Any]) -> dict[str, Any]:
             or pod.get("name")
             or "unknown"
         ),
+        "pod_namespace": str(pod.get("namespace") or ""),
+        "pod_name": str(pod.get("name") or ""),
+        "container_name": str(container.get("name") or ""),
+    }
+
+
+def _workload_identity(
+    identity: dict[str, str],
+    pod_identities: dict[tuple[str, str, str], dict[str, str]],
+) -> dict[str, str] | None:
+    key = (
+        identity["pod_namespace"],
+        identity["pod_name"],
+        identity["container_name"],
+    )
+    workload = pod_identities.get(key)
+    if not workload:
+        return None
+    return {
+        key: value
+        for key, value in workload.items()
+        if key != "node_name"
     }
 
 
@@ -43,8 +68,10 @@ def normalize_tetragon_event(
     event: dict[str, Any],
     intent_id: str | None,
     container_aliases: dict[str, str] | None = None,
+    pod_identities: dict[tuple[str, str, str], dict[str, str]] | None = None,
 ) -> dict[str, Any] | None:
     aliases = container_aliases or {}
+    identities = pod_identities or {}
     timestamp = event.get("time")
     if "process_exec" in event:
         data = event["process_exec"]
@@ -59,6 +86,9 @@ def normalize_tetragon_event(
         }
         if intent_id:
             payload["intent_id"] = intent_id
+        workload = _workload_identity(identity, identities)
+        if workload:
+            payload["workload_identity"] = workload
         return payload
 
     data = event.get("process_kprobe")
@@ -95,6 +125,9 @@ def normalize_tetragon_event(
     }
     if intent_id:
         payload["intent_id"] = intent_id
+    workload = _workload_identity(identity, identities)
+    if workload:
+        payload["workload_identity"] = workload
     return payload
 
 
@@ -131,6 +164,7 @@ def process_stream(
     container_name: str | None = None,
     include_event_types: set[str] | None = None,
     max_events: int = 0,
+    pod_identities: dict[tuple[str, str, str], dict[str, str]] | None = None,
 ) -> int:
     submitted = 0
     for line_number, line in enumerate(stream, start=1):
@@ -141,7 +175,9 @@ def process_stream(
         except json.JSONDecodeError as exc:
             print(f"line {line_number}: invalid JSON: {exc}", file=sys.stderr)
             continue
-        payload = normalize_tetragon_event(event, intent_id, container_aliases)
+        payload = normalize_tetragon_event(
+            event, intent_id, container_aliases, pod_identities
+        )
         if payload is None:
             continue
         if container_name and payload["container"] != container_name:
@@ -187,6 +223,16 @@ def main() -> int:
     )
     parser.add_argument("--container-name", help="Only submit events for this container")
     parser.add_argument(
+        "--pod-inventory",
+        type=Path,
+        help="kubectl Pod list JSON used to resolve Pod UID and ServiceAccount",
+    )
+    parser.add_argument(
+        "--cluster-name",
+        default="unknown-cluster",
+        help="Cluster identity assigned to enriched workload events",
+    )
+    parser.add_argument(
         "--include-event-type",
         action="append",
         choices=["process_exec", "file_access", "network_connect"],
@@ -206,6 +252,11 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
     event_types = set(args.include_event_type or [])
+    pod_identities = (
+        load_pod_inventory(args.pod_inventory, args.cluster_name)
+        if args.pod_inventory
+        else {}
+    )
 
     common = {
         "intent_id": args.intent_id,
@@ -216,6 +267,7 @@ def main() -> int:
         "container_name": args.container_name,
         "include_event_types": event_types,
         "max_events": max(0, args.max_events),
+        "pod_identities": pod_identities,
     }
     if args.input == "-":
         count = process_stream(

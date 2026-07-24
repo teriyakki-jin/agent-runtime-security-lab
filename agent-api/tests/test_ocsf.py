@@ -93,3 +93,47 @@ class OcsfMappingTests(unittest.TestCase):
             result["unmapped"]["security"]["owasp_agentic"][0]["uid"], "ASI05"
         )
         self.assertNotIn("/bin/sh", str(result))
+
+    def test_workload_identity_mismatch_exports_framework_mapping(self) -> None:
+        identity = {
+            "cluster": "arsl-phase7",
+            "namespace": "arsl-lab",
+            "pod_name": "shadow-runner",
+            "pod_uid": "pod-uid-shadow",
+            "service_account": "untrusted-runner",
+            "container_name": "tool",
+        }
+        finding = {
+            "finding_id": "finding-k8s",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "intent_id": "intent-k8s",
+            "finding_type": "workload_identity_mismatch",
+            "title": "Unexpected workload identity",
+            "reason": "Observed identity differs from the intent binding.",
+            "severity_id": 5,
+            "severity": "Critical",
+            "matched": False,
+            "tool": "kubernetes_job",
+            "policy_action": "allow",
+            "observation": {
+                "observation_id": "observation-k8s",
+                "source": "tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/echo",
+                "target_fingerprint": "0123456789abcdef",
+                "container": "tool",
+                "workload_identity": identity,
+            },
+        }
+        result = to_ocsf_detection_finding(finding)
+
+        self.assertEqual(
+            result["unmapped"]["security"]["workload_identity"], identity
+        )
+        self.assertEqual(
+            result["unmapped"]["security"]["owasp_agentic"][0]["uid"], "ASI03"
+        )
+        self.assertEqual(
+            result["finding_info"]["attacks"][0]["technique"]["uid"], "T1078"
+        )
+        self.assertNotIn("/bin/echo", str(result))

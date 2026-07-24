@@ -7,7 +7,7 @@ from app.threat import classify_finding
 
 
 OCSF_VERSION = "1.8.0"
-PRODUCT_VERSION = "0.6.0"
+PRODUCT_VERSION = "0.7.0"
 OCSF_CATEGORY_UID = 6
 OCSF_CLASS_UID = 6003
 
@@ -104,6 +104,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
     observation = finding["observation"]
     matched = finding["matched"]
     classification = classify_finding(finding)
+    workload_identity = observation.get("workload_identity")
     return {
         "activity_id": 1,
         "activity_name": "Create",
@@ -159,6 +160,7 @@ def to_ocsf_detection_finding(finding: dict[str, Any]) -> dict[str, Any]:
                 "tool": finding["tool"],
                 "policy_action": finding["policy_action"],
                 "owasp_agentic": classification["owasp_agentic"],
+                "workload_identity": workload_identity,
             }
         },
     }

@@ -2,15 +2,16 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 6 — Detection-as-Code + OWASP Agentic / MITRE ATT&CK Mapping**
+> Current: **Phase 7 — Kubernetes Workload Identity Correlation**
 
-![Phase 6 Kibana threat detection dashboard](docs/screenshots/phase6-threat-detection.png)
+![Phase 7 Kubernetes workload identity correlation](docs/screenshots/phase7-kubernetes-identity.png)
 
 - [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
 - [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
 - [Phase 4: Live Tetragon eBPF Validation](docs/PHASE4.md)
 - [Phase 5: OCSF SOC Pipeline](docs/PHASE5.md)
 - [Phase 6: Detection-as-Code & Threat Mapping](docs/PHASE6.md)
+- [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
 
 ## Why this project
 
@@ -25,6 +26,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - 원본 인자와 관측 대상을 OCSF 내보내기에서 fingerprint로 비식별화
 - Jaeger에서 `invoke_agent`와 `execute_tool` span 추적
 - ES|QL detection-as-code로 OCSF finding을 경보화하고 OWASP Agentic 2026 / MITRE ATT&CK에 매핑
+- Kubernetes Pod UID·Namespace·ServiceAccount를 intent와 eBPF event에 바인딩해 workload identity 도용 탐지
 
 ## Architecture
 
@@ -52,6 +54,9 @@ flowchart LR
     ES --> DETECT
     DETECT --> ALERTS["Idempotent Alert Index"]
     ALERTS --> THREAT["Threat Mapping Dashboard"]
+    K8S["Kubernetes Pod Inventory"] --> IDENTITY["Workload Identity Resolver"]
+    TETRAGON --> IDENTITY
+    IDENTITY --> CORRELATOR
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -185,6 +190,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-detections.ps1
 
 기본 시나리오와 실 Tetragon 회귀에서 탐지 10건, Critical 8건, OWASP ASI02·ASI05·ASI10과 MITRE T1041·T1059 매핑 결과를 [Phase 6 문서](docs/PHASE6.md)와 [검증 증거](docs/evidence/phase6-threat-detection.json)에 기록했습니다.
 
+## Try Phase 7 — Kubernetes identity
+
+전용 Kind 클러스터에 Tetragon 1.7.0과 두 hardened workload를 배포하고 실제 `process_exec` event를 identity-aware correlator로 검증합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
+```
+
+- `approved-tool / agent-tools`: intent에 바인딩된 Pod UID와 일치
+- `shadow-runner / untrusted-runner`: 동일 intent 재사용 시 Critical identity mismatch
+- OWASP ASI03 Identity & Privilege Abuse / MITRE T1078 Valid Accounts 매핑
+
+실제 Kind/Tetragon 검증 결과는 [Phase 7 문서](docs/PHASE7.md)와 [검증 증거](docs/evidence/phase7-kubernetes-identity.json)에 기록했습니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -205,9 +224,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-lab.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-tetragon.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-soc.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 ```
 
-기본 검증은 OPA 5개 정책 테스트, Agent API 18개와 adapter 5개 단위 테스트, 4개 정책 시나리오, approve/deny 및 replay 방어, 3개 runtime correlation 시나리오, 서명된 센서 수집, OCSF 1.8 비식별화를 확인합니다. Phase 4는 실제 커널 event 2종, Phase 5는 SOC 수집과 개인정보 경계, Phase 6는 ES|QL rule 3개·위협 매핑·중복 방지를 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 SOC/detection 정적 자산 검증을 실행합니다.
+기본 검증은 OPA 5개 정책 테스트, Agent API 25개와 sensor 8개 단위 테스트, 정책 시나리오, 승인/replay 방어, runtime correlation, OCSF 비식별화를 확인합니다. Phase 4는 실제 커널 event, Phase 5/6는 SOC와 detection-as-code, Phase 7은 실제 Kind Pod UID·ServiceAccount·Tetragon event correlation을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~7 정적 자산 검증을 실행합니다.
 
 ## Tech stack
 
@@ -223,6 +243,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.
 | Logstash 9.4.2 | Idempotent OCSF collection and normalization |
 | Kibana 9.4.2 | SOC metrics, severity and runtime hunt dashboard |
 | ES|QL detection pack | Versioned agent runtime rules and idempotent alerts |
+| Kind + Kubernetes 1.36 | Reproducible workload identity and ServiceAccount lab |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -236,7 +257,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.
 - [x] OCSF Logstash pipeline, Elasticsearch 보존 정책, Kibana hunt dashboard
 - [x] OWASP Agentic Top 10 / MITRE ATT&CK 자동 매핑
 - [x] ES|QL detection-as-code와 Kibana threat dashboard
-- [ ] Kind/Kubernetes Runtime Hook과 pod identity correlation
+- [x] Kind/Kubernetes Pod UID·ServiceAccount runtime correlation
+- [ ] Kubernetes audit log와 RBAC privilege escalation correlation
 - [ ] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [ ] Local LLM indirect prompt injection 재현
 - [ ] Elastic native detection scheduling과 Slack/Teams alert connector
@@ -253,7 +275,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.
 - [Elastic ES|QL detection rules](https://www.elastic.co/docs/solutions/security/detect-and-alert/esql)
 - [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/)
 - [MITRE ATT&CK T1059](https://attack.mitre.org/techniques/T1059/)
+- [Tetragon Kubernetes deployment](https://tetragon.io/docs/installation/kubernetes/)
+- [Kubernetes ServiceAccounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
+- [MITRE ATT&CK T1078](https://attack.mitre.org/techniques/T1078/)
 
 ## Safety scope
 
-이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5/6 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS, 인증, Detection Engine 권한을 적용해야 합니다.
+이 저장소는 격리된 로컬 교육 환경용입니다. 공격 시나리오는 실제 외부 전송이나 셸 실행 없이 모의 처리합니다. Tetragon 정책은 관측 전용이며 운영 시스템에 적용하기 전에 대상 커널과 이벤트 부하를 별도로 검증해야 합니다. Phase 5/6 Elastic 보안 기능은 로컬 재현성을 위해 비활성화되어 있으므로 loopback 밖에 노출하지 말고 운영 환경에서는 TLS, 인증, Detection Engine 권한을 적용해야 합니다. Phase 7 Kind 클러스터는 전용 `arsl-phase7` 이름을 사용하며 테스트 workload의 ServiceAccount token automount를 비활성화합니다.

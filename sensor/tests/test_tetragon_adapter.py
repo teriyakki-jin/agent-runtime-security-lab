@@ -60,6 +60,35 @@ class TetragonAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "12\+"):
             parse_container_aliases(["short=arsl-mcp-server"])
 
+    def test_enriches_event_with_kubernetes_workload_identity(self) -> None:
+        event = {
+            "time": "2026-07-24T00:00:00Z",
+            "process_exec": {
+                "process": {
+                    "binary": "/bin/true",
+                    "pod": {
+                        "namespace": "arsl-lab",
+                        "name": "approved-tool",
+                        "container": {"name": "tool"},
+                    },
+                }
+            },
+        }
+        identity = {
+            "cluster": "arsl-phase7",
+            "namespace": "arsl-lab",
+            "pod_name": "approved-tool",
+            "pod_uid": "pod-uid-1",
+            "service_account": "agent-tools",
+            "container_name": "tool",
+        }
+        result = normalize_tetragon_event(
+            event,
+            "intent-1",
+            pod_identities={("arsl-lab", "approved-tool", "tool"): identity},
+        )
+        self.assertEqual(result["workload_identity"], identity)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any
@@ -11,6 +12,14 @@ from uuid import uuid4
 
 
 EVENT_TYPES = {"process_exec", "file_access", "network_connect"}
+WORKLOAD_IDENTITY_FIELDS = (
+    "cluster",
+    "namespace",
+    "pod_name",
+    "pod_uid",
+    "service_account",
+    "container_name",
+)
 
 
 def canonical_sensor_payload(payload: dict[str, Any]) -> bytes:
@@ -34,13 +43,46 @@ def _timestamp(value: Any) -> str:
         return datetime.now(timezone.utc).isoformat()
     if not isinstance(value, str) or len(value) > 64:
         raise ValueError("Runtime observation timestamp must be an ISO-8601 string.")
+    normalized = re.sub(
+        r"(\.\d{6})\d+(?=Z$|[+-]\d{2}:\d{2}$)",
+        r"\1",
+        value,
+    )
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError("Runtime observation timestamp is not valid ISO-8601.") from exc
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).isoformat()
+
+
+def normalize_workload_identity(value: Any) -> dict[str, str] | None:
+    """Validate and bound the Kubernetes identity carried by a trusted sensor."""
+    if value in (None, {}):
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("Workload identity must be a JSON object.")
+    identity: dict[str, str] = {}
+    for field in WORKLOAD_IDENTITY_FIELDS:
+        item = value.get(field)
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"Workload identity field is required: {field}")
+        if len(item) > 253:
+            raise ValueError(f"Workload identity field is too long: {field}")
+        identity[field] = item.strip()
+    return identity
+
+
+def workload_identity_matches(
+    expected: dict[str, str] | None,
+    observed: dict[str, str] | None,
+) -> bool:
+    if expected is None:
+        return True
+    if observed is None:
+        return False
+    return all(expected[field] == observed[field] for field in WORKLOAD_IDENTITY_FIELDS)
 
 
 class RuntimeMonitor:
@@ -64,12 +106,17 @@ class RuntimeMonitor:
         policy_action: str,
         executed: bool,
         container: str = "arsl-mcp-server",
+        workload_identity: dict[str, str] | None = None,
+        expected_event_types: list[str] | None = None,
+        expected_target_prefix: str | None = None,
     ) -> dict[str, Any]:
-        expected_events: list[str] = []
-        expected_target_prefix: str | None = None
+        expected_events: list[str] = list(expected_event_types or [])
         if executed and tool == "read_document":
             expected_events = ["file_access"]
             expected_target_prefix = "/app/documents/public/"
+        elif executed and tool == "kubernetes_job" and not expected_events:
+            expected_events = ["process_exec"]
+            expected_target_prefix = "/bin/"
 
         intent = {
             "intent_id": intent_id,
@@ -79,6 +126,7 @@ class RuntimeMonitor:
             "policy_action": policy_action,
             "executed": executed,
             "container": container,
+            "workload_identity": normalize_workload_identity(workload_identity),
             "expected_event_types": expected_events,
             "expected_target_prefix": expected_target_prefix,
         }
@@ -104,6 +152,9 @@ class RuntimeMonitor:
             "target": target,
             "target_fingerprint": _fingerprint(target),
             "container": str(raw_observation.get("container", "unknown"))[:128],
+            "workload_identity": normalize_workload_identity(
+                raw_observation.get("workload_identity")
+            ),
             "correlation_method": "explicit" if supplied_intent_id else "none",
             "correlation_delta_ms": None,
         }
@@ -111,7 +162,11 @@ class RuntimeMonitor:
             correlated = self._auto_correlate(observation)
             if correlated:
                 observation["intent_id"], delta_ms = correlated
-                observation["correlation_method"] = "container_time_window"
+                observation["correlation_method"] = (
+                    "kubernetes_workload_identity"
+                    if observation["workload_identity"]
+                    else "container_time_window"
+                )
                 observation["correlation_delta_ms"] = delta_ms
         self.observations.appendleft(observation)
         finding = self._analyze(observation)
@@ -125,6 +180,10 @@ class RuntimeMonitor:
         candidates: list[tuple[float, str]] = []
         for intent in reversed(list(self.intents.values())):
             if intent["container"] != observation["container"]:
+                continue
+            if not workload_identity_matches(
+                intent["workload_identity"], observation["workload_identity"]
+            ):
                 continue
             intent_at = datetime.fromisoformat(intent["timestamp"])
             delta = (observed_at - intent_at).total_seconds()
@@ -147,6 +206,23 @@ class RuntimeMonitor:
                 severity="High",
                 title="Runtime activity has no matching agent intent",
                 reason="The sensor event could not be correlated to an authorized tool intent.",
+            )
+
+        if not workload_identity_matches(
+            intent["workload_identity"], observation["workload_identity"]
+        ):
+            return self._finding(
+                observation,
+                intent,
+                matched=False,
+                finding_type="workload_identity_mismatch",
+                severity_id=5,
+                severity="Critical",
+                title="Runtime activity used an unexpected Kubernetes workload identity",
+                reason=(
+                    "The observed Pod UID, namespace, service account, or container "
+                    "does not match the identity bound to the authorized agent intent."
+                ),
             )
 
         expected_types = intent["expected_event_types"]
@@ -235,16 +311,21 @@ class RuntimeMonitor:
     def status(self) -> dict[str, Any]:
         source_counts: dict[str, int] = {}
         auto_correlated = 0
+        identity_correlated = 0
         for observation in self.observations:
             source = observation["source"]
             source_counts[source] = source_counts.get(source, 0) + 1
             if observation["correlation_method"] == "container_time_window":
                 auto_correlated += 1
+            elif observation["correlation_method"] == "kubernetes_workload_identity":
+                auto_correlated += 1
+                identity_correlated += 1
         latest = self.observations[0]["timestamp"] if self.observations else None
         return {
             "sensor_mode": "tetragon" if source_counts.get("tetragon") else "simulator",
             "last_observation_at": latest,
             "source_counts": source_counts,
             "auto_correlated": auto_correlated,
+            "identity_correlated": identity_correlated,
             "correlation_window_seconds": self.auto_correlation_window_seconds,
         }

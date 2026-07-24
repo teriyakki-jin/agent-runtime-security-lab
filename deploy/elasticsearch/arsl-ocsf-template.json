@@ -90,6 +90,16 @@
                     "name": { "type": "keyword" },
                     "version": { "type": "keyword" }
                   }
+                },
+                "workload_identity": {
+                  "properties": {
+                    "cluster": { "type": "keyword" },
+                    "namespace": { "type": "keyword" },
+                    "pod_name": { "type": "keyword" },
+                    "pod_uid": { "type": "keyword" },
+                    "service_account": { "type": "keyword" },
+                    "container_name": { "type": "keyword" }
+                  }
                 }
               }
             }

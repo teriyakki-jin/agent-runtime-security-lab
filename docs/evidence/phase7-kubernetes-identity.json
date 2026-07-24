@@ -1,0 +1,45 @@
+{
+  "phase": 7,
+  "validated_at": "2026-07-24",
+  "environment": {
+    "host": "Windows Docker Desktop WSL2",
+    "kind": "0.32.0",
+    "kubernetes": "1.36.1",
+    "kubectl": "1.36.1",
+    "helm": "4.2.3",
+    "tetragon": "1.7.0",
+    "cluster": "arsl-phase7"
+  },
+  "runtime": {
+    "tetragon_daemonset_ready": "1/1",
+    "workload_pods_ready": "2/2",
+    "events_scanned": 4,
+    "event_type": "process_exec"
+  },
+  "approved": {
+    "pod": "approved-tool",
+    "pod_uid": "44db38b4-e866-4182-a17a-06552ff67b5d",
+    "service_account": "agent-tools",
+    "finding_type": "intent_runtime_match",
+    "matched": true
+  },
+  "shadow": {
+    "pod": "shadow-runner",
+    "pod_uid": "d8109962-6b96-412e-9946-54d317cd7c8b",
+    "service_account": "untrusted-runner",
+    "finding_type": "workload_identity_mismatch",
+    "severity": "Critical",
+    "owasp_agentic": ["ASI03"],
+    "mitre_attack": ["T1078"]
+  },
+  "orphan_detection": "orphan_runtime_activity",
+  "privacy": {
+    "raw_process_arguments_exported": false
+  },
+  "artifacts": {
+    "screenshot": "docs/screenshots/phase7-kubernetes-identity.png",
+    "screenshot_sha256": "a285dfe08f3cb653572ad5846260b5f1eb5df4dec6d18e65ca41f04f0d76ac46",
+    "cluster_config": "deploy/kind/phase7-cluster.yaml",
+    "workloads": "deploy/kubernetes/phase7-workloads.yaml"
+  }
+}
