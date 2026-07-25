@@ -45,9 +45,13 @@ jobs:
           python -m json.tool docs/evidence/phase8-kubernetes-audit-chain.json > /dev/null
           python -m json.tool docs/evidence/phase9-mcp-oauth.json > /dev/null
           python -m json.tool docs/evidence/phase10-local-llm-injection.json > /dev/null
+          python -m json.tool docs/evidence/phase11-native-alerting.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
+          python -m json.tool deploy/elasticsearch/arsl-notifications-template.json > /dev/null
           python -m json.tool deploy/elastic/detection-rules/agent-runtime-rules.json > /dev/null
+          python -m json.tool deploy/elastic/connectors/slack.example.json > /dev/null
+          python -m json.tool deploy/elastic/connectors/teams.example.json > /dev/null
           python - <<'PY'
           import json
           from pathlib import Path
@@ -60,6 +64,10 @@ jobs:
           assert len(threat_lines) == 6
           threat_objects = [json.loads(line) for line in threat_lines]
           assert any(item.get("id") == "arsl-threat-mapping" for item in threat_objects)
+          incident_lines = Path("deploy/kibana/arsl-incident-response-dashboard.ndjson").read_text().splitlines()
+          assert len(incident_lines) == 5
+          incident_objects = [json.loads(line) for line in incident_lines]
+          assert any(item.get("id") == "arsl-phase11-incident-response" for item in incident_objects)
           workloads = Path("deploy/kubernetes/phase7-workloads.yaml").read_text()
           for control in (
               "runAsNonRoot: true",
@@ -113,6 +121,25 @@ jobs:
           guard = Path("agent-api/app/prompt_guard.py").read_text()
           assert 'normalize("NFKC"' in guard
           assert Path("agent-api/fixtures/untrusted/quarterly-report.txt").is_file()
+          phase11 = json.loads(Path("docs/evidence/phase11-native-alerting.json").read_text())
+          assert phase11["result"] == "passed"
+          assert all(phase11["checks"].values())
+          assert len(phase11["rules"]) == 3
+          assert all(rule["type"] == "esql" and rule["enabled"] for rule in phase11["rules"])
+          assert phase11["connector"]["type"] == ".index"
+          assert phase11["connector"]["minimum_license"] == "basic"
+          assert phase11["delivery"]["native_alerts_created"] == 3
+          assert phase11["delivery"]["notifications_created"] == 3
+          assert not any(phase11["privacy"].values())
+          assert phase11["external_channels"]["slack"]["configured"] is False
+          assert phase11["external_channels"]["teams"]["configured"] is False
+          slack = json.loads(Path("deploy/elastic/connectors/slack.example.json").read_text())
+          teams = json.loads(Path("deploy/elastic/connectors/teams.example.json").read_text())
+          assert slack["secrets"]["webhookUrl"] == "${SLACK_WEBHOOK_URL}"
+          assert teams["secrets"]["webhookUrl"] == "${TEAMS_WEBHOOK_URL}"
+          notification_template = json.loads(Path("deploy/elasticsearch/arsl-notifications-template.json").read_text())
+          assert notification_template["template"]["mappings"]["dynamic"] == "strict"
+          assert notification_template["template"]["settings"]["index.lifecycle.name"] == "arsl-ocsf-7d"
           PY
 
       - name: Validate OPA policies

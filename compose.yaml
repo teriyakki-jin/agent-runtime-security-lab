@@ -152,6 +152,7 @@ services:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
       XPACK_SECURITY_ENABLED: "false"
       XPACK_SECURITY_SHOWINSECURECLUSTERWARNING: "false"
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${ARSL_KIBANA_ENCRYPTION_KEY:-arsl-local-only-encryption-key-change-me}
       TELEMETRY_ENABLED: "false"
       NODE_OPTIONS: --max-old-space-size=768
     ports:

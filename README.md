@@ -2,7 +2,11 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 10 — Local LLM Indirect Prompt Injection Defense**
+> Current: **Phase 11 — Elastic-Native Detection & Incident Response**
+
+![Phase 11 Elastic-native alerting](docs/screenshots/phase11-native-alerting.png)
+
+> Previous: **Phase 10 — Local LLM Indirect Prompt Injection Defense**
 
 ![Phase 10 local LLM prompt injection validation](docs/screenshots/phase10-local-llm-injection.png)
 
@@ -23,6 +27,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
 - [Phase 9: OAuth 2.1 MCP Authorization & Tool Scope](docs/PHASE9.md)
 - [Phase 10: Local LLM Indirect Prompt Injection Defense](docs/PHASE10.md)
+- [Phase 11: Elastic-Native Detection & Incident Response](docs/PHASE11.md)
 
 ## Why this project
 
@@ -66,6 +71,11 @@ flowchart LR
     ES --> DETECT
     DETECT --> ALERTS["Idempotent Alert Index"]
     ALERTS --> THREAT["Threat Mapping Dashboard"]
+    RULES --> NATIVE["Elastic Security scheduled rules"]
+    ES --> NATIVE
+    NATIVE --> SIGNALS["Native Security alerts"]
+    SIGNALS --> CONNECTOR["Basic index connector"]
+    CONNECTOR --> INCIDENT["Incident timeline"]
     K8S["Kubernetes Pod Inventory"] --> IDENTITY["Workload Identity Resolver"]
     TETRAGON --> IDENTITY
     IDENTITY --> CORRELATOR
@@ -276,6 +286,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-llm.ps1
 
 See the [Phase 10 report](docs/PHASE10.md) and [sanitized evidence](docs/evidence/phase10-local-llm-injection.json).
 
+## Try Phase 11 — Elastic-native alerting
+
+Synchronize the versioned ES|QL pack into Elastic Security, replay three attack classes, deliver privacy-safe connector notifications, and verify that scheduled runs do not duplicate alerts.
+
+```powershell
+docker compose --profile soc up -d --build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alerting.ps1
+```
+
+- three enabled Elastic Security ES|QL rules on a one-minute schedule
+- native alerts in `.alerts-security.alerts-default`
+- Basic-compatible `.index` connector with no stored secret
+- sanitized deliveries in `arsl-notifications-v1` with seven-day retention
+- stable counts across the next schedule, proving duplicate suppression
+- Slack and Teams configuration examples with their Gold-license requirement documented
+- importable Kibana Incident Response dashboard and machine-readable evidence
+
+Open the dashboard at <http://127.0.0.1:15601/app/dashboards#/view/arsl-phase11-incident-response>. See the [Phase 11 report](docs/PHASE11.md) and [sanitized evidence](docs/evidence/phase11-native-alerting.json).
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -300,9 +329,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-detections.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alerting.ps1
 ```
 
-기본 검증은 OPA 5개, Agent API 30개, MCP 6개, OAuth 4개, sensor 8개, detection 3개, Kubernetes attack-chain 4개 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 9는 실제 PKCE code flow와 MCP tool scope를 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~9 정적 자산 검증을 실행합니다.
+기본 검증은 OPA 5개, Agent API 34개, MCP 6개, OAuth 4개, sensor 8개, detection 6개, Kubernetes attack-chain 4개 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 9~11은 OAuth scope, 실제 로컬 LLM, Elastic-native alerting을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~11 정적 자산 검증을 실행합니다.
 
 ## Tech stack
 
@@ -318,6 +348,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 | Logstash 9.4.2 | Idempotent OCSF collection and normalization |
 | Kibana 9.4.2 | SOC metrics, severity and runtime hunt dashboard |
 | ES|QL detection pack | Versioned agent runtime rules and idempotent alerts |
+| Elastic Security Detection Engine | Scheduled native alerts and duplicate suppression |
+| Kibana connectors | Basic index delivery plus license-aware Slack/Teams templates |
 | Kind + Kubernetes 1.36 | Reproducible workload identity and ServiceAccount lab |
 | Kubernetes Audit Log | RBAC privilege escalation and API-to-runtime attack chain |
 | OAuth 2.1 + RS256 JWT | MCP protected resource, PKCE and tool scopes |
@@ -337,8 +369,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 - [x] Kind/Kubernetes Pod UID·ServiceAccount runtime correlation
 - [x] Kubernetes audit log와 RBAC privilege escalation correlation
 - [x] OAuth 2.1 기반 MCP 인증 및 tool scope
-- [ ] Local LLM indirect prompt injection 재현
-- [ ] Elastic native detection scheduling과 Slack/Teams alert connector
+- [x] Local LLM indirect prompt injection 재현
+- [x] Elastic native detection scheduling과 license-aware alert connectors
 
 ## References
 
@@ -350,6 +382,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 - [Elastic Stack installation](https://www.elastic.co/guide/en/elastic-stack/current/installing-elastic-stack.html)
 - [Logstash HTTP poller](https://www.elastic.co/docs/reference/logstash/plugins/plugins-inputs-http_poller)
 - [Elastic ES|QL detection rules](https://www.elastic.co/docs/solutions/security/detect-and-alert/esql)
+- [Elastic alert suppression](https://www.elastic.co/docs/solutions/security/detect-and-alert/alert-suppression)
+- [Kibana connectors](https://www.elastic.co/docs/reference/kibana/connectors-kibana)
 - [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/)
 - [MITRE ATT&CK T1059](https://attack.mitre.org/techniques/T1059/)
 - [Tetragon Kubernetes deployment](https://tetragon.io/docs/installation/kubernetes/)

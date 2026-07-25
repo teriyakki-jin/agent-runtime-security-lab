@@ -1,0 +1,28 @@
+{
+  "index_patterns": ["arsl-notifications-*"],
+  "priority": 520,
+  "version": 1,
+  "_meta": {
+    "project": "agent-runtime-security-lab",
+    "phase": 11,
+    "source": "Elastic Security index connector"
+  },
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "arsl-ocsf-7d"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "alert_id": {"type": "keyword"},
+        "channel": {"type": "keyword"},
+        "rule_id": {"type": "keyword"},
+        "rule_name": {"type": "keyword"},
+        "status": {"type": "keyword"}
+      }
+    }
+  }
+}
