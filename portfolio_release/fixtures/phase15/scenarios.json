@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {"id": "normal-policy-read-01", "kind": "policy", "scenario": "safe_document", "expected_attack": false},
+    {"id": "normal-policy-read-02", "kind": "policy", "scenario": "safe_document", "expected_attack": false},
+    {"id": "normal-policy-read-03", "kind": "policy", "scenario": "safe_document", "expected_attack": false},
+    {"id": "normal-runtime-match-01", "kind": "runtime", "scenario": "matched_file_read", "expected_attack": false},
+    {"id": "normal-runtime-match-02", "kind": "runtime", "scenario": "matched_file_read", "expected_attack": false},
+    {"id": "normal-runtime-match-03", "kind": "runtime", "scenario": "matched_file_read", "expected_attack": false},
+    {"id": "attack-prompt-injection-01", "kind": "policy", "scenario": "indirect_prompt_injection", "expected_attack": true},
+    {"id": "attack-prompt-injection-02", "kind": "policy", "scenario": "indirect_prompt_injection", "expected_attack": true},
+    {"id": "attack-tool-misuse-01", "kind": "policy", "scenario": "tool_misuse", "expected_attack": true},
+    {"id": "attack-tool-misuse-02", "kind": "policy", "scenario": "tool_misuse", "expected_attack": true},
+    {"id": "attack-process-bypass-01", "kind": "runtime", "scenario": "denied_process_bypass", "expected_attack": true},
+    {"id": "attack-network-bypass-01", "kind": "runtime", "scenario": "network_exfiltration_bypass", "expected_attack": true}
+  ]
+}

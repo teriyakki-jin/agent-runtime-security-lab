@@ -1,0 +1,182 @@
+import json
+import unittest
+
+from app.ocsf import to_ocsf_api_activity, to_ocsf_detection_finding
+
+
+class OcsfMappingTests(unittest.TestCase):
+    def test_maps_agent_tool_event_to_ocsf_18_api_activity(self) -> None:
+        event = {
+            "event_id": "event-1",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "actor": "lab-analyst",
+            "scenario_id": "data_exfiltration",
+            "tool": "mock_http_request",
+            "argument_keys": ["url"],
+            "argument_fingerprint": "0123456789abcdef",
+            "decision": {
+                "allow": False,
+                "action": "review",
+                "risk_score": 80,
+                "reasons": ["review required"],
+            },
+            "approval_id": "approval-1",
+            "executed": False,
+            "output": [],
+        }
+
+        result = to_ocsf_api_activity(event)
+
+        self.assertEqual(result["metadata"]["version"], "1.8.0")
+        self.assertEqual(result["metadata"]["profiles"], ["ai_operation"])
+        self.assertEqual(result["category_uid"], 6)
+        self.assertEqual(result["class_uid"], 6003)
+        self.assertEqual(result["type_uid"], 600399)
+        self.assertEqual(result["status"], "Pending Review")
+        self.assertEqual(result["message_context"]["ai_role_id"], 4)
+
+    def test_export_does_not_contain_raw_arguments(self) -> None:
+        event = {
+            "event_id": "event-2",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "actor": "lab-analyst",
+            "scenario_id": None,
+            "tool": "read_document",
+            "argument_keys": ["path"],
+            "argument_fingerprint": "fedcba9876543210",
+            "decision": {
+                "allow": False,
+                "action": "deny",
+                "risk_score": 100,
+                "reasons": ["blocked"],
+            },
+            "approval_id": None,
+            "executed": False,
+            "output": [],
+        }
+
+        serialized = json.dumps(to_ocsf_api_activity(event))
+
+        self.assertNotIn("../../etc/shadow", serialized)
+        self.assertNotIn('"arguments"', serialized)
+
+    def test_runtime_mismatch_maps_to_detection_finding(self) -> None:
+        finding = {
+            "finding_id": "finding-1",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "intent_id": "intent-1",
+            "finding_type": "policy_runtime_mismatch",
+            "title": "Observed process execution after a policy deny",
+            "reason": "The policy denied execution but the sensor observed activity.",
+            "severity_id": 5,
+            "severity": "Critical",
+            "matched": False,
+            "tool": "run_command",
+            "policy_action": "deny",
+            "observation": {
+                "observation_id": "observation-1",
+                "source": "tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/sh",
+                "target_fingerprint": "0123456789abcdef",
+                "container": "arsl-mcp-server",
+            },
+        }
+        result = to_ocsf_detection_finding(finding)
+        self.assertEqual(result["class_uid"], 2004)
+        self.assertEqual(result["metadata"]["version"], "1.8.0")
+        self.assertTrue(result["is_alert"])
+        self.assertEqual(
+            result["finding_info"]["attacks"][0]["technique"]["uid"], "T1059"
+        )
+        self.assertEqual(
+            result["unmapped"]["security"]["owasp_agentic"][0]["uid"], "ASI05"
+        )
+        self.assertNotIn("/bin/sh", str(result))
+
+    def test_workload_identity_mismatch_exports_framework_mapping(self) -> None:
+        identity = {
+            "cluster": "arsl-phase7",
+            "namespace": "arsl-lab",
+            "pod_name": "shadow-runner",
+            "pod_uid": "pod-uid-shadow",
+            "service_account": "untrusted-runner",
+            "container_name": "tool",
+        }
+        finding = {
+            "finding_id": "finding-k8s",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "intent_id": "intent-k8s",
+            "finding_type": "workload_identity_mismatch",
+            "title": "Unexpected workload identity",
+            "reason": "Observed identity differs from the intent binding.",
+            "severity_id": 5,
+            "severity": "Critical",
+            "matched": False,
+            "tool": "kubernetes_job",
+            "policy_action": "allow",
+            "observation": {
+                "observation_id": "observation-k8s",
+                "source": "tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/echo",
+                "target_fingerprint": "0123456789abcdef",
+                "container": "tool",
+                "workload_identity": identity,
+            },
+        }
+        result = to_ocsf_detection_finding(finding)
+
+        self.assertEqual(
+            result["unmapped"]["security"]["workload_identity"], identity
+        )
+        self.assertEqual(
+            result["unmapped"]["security"]["owasp_agentic"][0]["uid"], "ASI03"
+        )
+        self.assertEqual(
+            result["finding_info"]["attacks"][0]["technique"]["uid"], "T1078"
+        )
+        self.assertNotIn("/bin/echo", str(result))
+
+    def test_kubernetes_attack_chain_exports_two_attack_techniques(self) -> None:
+        finding = {
+            "finding_id": "finding-chain",
+            "timestamp": "2026-07-24T00:00:00+00:00",
+            "intent_id": "",
+            "finding_type": "kubernetes_privilege_escalation_chain",
+            "title": "Kubernetes RBAC escalation reached runtime execution",
+            "reason": "A ServiceAccount changed RBAC, created a Pod, and executed code.",
+            "severity_id": 5,
+            "severity": "Critical",
+            "matched": False,
+            "tool": "kubernetes_api",
+            "policy_action": "deny",
+            "observation": {
+                "observation_id": "observation-chain",
+                "source": "kubernetes-audit+tetragon",
+                "event_type": "process_exec",
+                "process": "/bin/echo",
+                "target_fingerprint": "0123456789abcdef",
+                "container": "tool",
+                "workload_identity": {
+                    "cluster": "arsl-phase8",
+                    "namespace": "arsl-lab",
+                    "pod_name": "audit-shadow",
+                    "pod_uid": "pod-uid-chain",
+                    "service_account": "compromised-agent",
+                    "container_name": "tool",
+                },
+            },
+        }
+
+        result = to_ocsf_detection_finding(finding)
+
+        self.assertEqual(
+            [item["technique"]["uid"] for item in result["finding_info"]["attacks"]],
+            ["T1098.006", "T1610"],
+        )
+        self.assertEqual(
+            result["unmapped"]["security"]["owasp_agentic"][0]["uid"],
+            "ASI03",
+        )
+        self.assertNotIn("/bin/echo", str(result))

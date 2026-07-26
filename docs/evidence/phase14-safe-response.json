@@ -1,0 +1,63 @@
+{
+    "causal_graph":  {
+                         "explicit_edge_count":  2,
+                         "matched_sequence":  [
+                                                  "scope_violation",
+                                                  "tool_call",
+                                                  "runtime_mismatch"
+                                              ],
+                         "timestamp_only_match":  false
+                     },
+    "checks":  {
+                   "causal_path_matched":  true,
+                   "container_isolation_applied":  true,
+                   "delegated_identity_verified":  true,
+                   "duplicate_response_suppressed":  true,
+                   "human_hold_prevented_recovery":  true,
+                   "human_override_restored_target":  true,
+                   "mttr_measured":  true,
+                   "network_isolation_applied":  true,
+                   "oauth_token_revoked":  true,
+                   "time_only_correlation_rejected":  true,
+                   "ttl_auto_recovery_completed":  true,
+                   "oauth_revocation_acknowledged":  true,
+                   "oauth_token_inactive_after_revocation":  true,
+                   "container_restored":  true,
+                   "network_restored":  true
+               },
+    "identity":  {
+                     "agent_id":  "agent:researcher",
+                     "delegation_depth":  1,
+                     "root_subject":  "arsl-agent-gateway",
+                     "token_fingerprint":  "b1e99cf7ae262844"
+                 },
+    "mttr":  {
+                 "detect_to_block_ms":  3154,
+                 "slo_ms":  5000,
+                 "within_slo":  true
+             },
+    "phase":  14,
+    "privacy":  {
+                    "access_token_exported":  false,
+                    "client_secret_exported":  false,
+                    "raw_jti_exported":  false,
+                    "raw_tool_arguments_exported":  false
+                },
+    "response":  {
+                     "duplicates_suppressed":  1,
+                     "final_state":  "restored",
+                     "networks_detached":  1,
+                     "target":  "arsl-mcp-server",
+                     "token_remains_revoked_after_restore":  true,
+                     "ttl_seconds":  1
+                 },
+    "result":  "passed",
+    "tests":  {
+                  "passed":  43,
+                  "failed":  0,
+                  "response_engine":  28,
+                  "authorization_server":  10,
+                  "mcp_oauth":  5,
+                  "coverage_percent":  85.51
+              }
+}

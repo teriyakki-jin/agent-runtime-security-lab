@@ -1,0 +1,45 @@
+{
+    "checks":  {
+                   "authorization_server_supports_pkce_s256":  true,
+                   "correctly_scoped_tool_call_allowed":  true,
+                   "protected_resource_requires_token":  true,
+                   "under_scoped_tool_call_blocked":  true,
+                   "wrong_resource_rejected":  true
+               },
+    "client_id":  "arsl-phase9-cli",
+    "finding":  {
+                    "finding_type":  "mcp_oauth_scope_violation",
+                    "matched":  false,
+                    "observation":  {
+                                        "event_type":  "oauth_token_use"
+                                    },
+                    "severity":  "High",
+                    "threat":  {
+                                   "mitre_attacks":  [
+                                                         {
+                                                             "tactic":  {
+                                                                            "name":  "Lateral Movement",
+                                                                            "uid":  "TA0008"
+                                                                        },
+                                                             "technique":  {
+                                                                               "name":  "Application Access Token",
+                                                                               "src_url":  "https://attack.mitre.org/techniques/T1550/001/",
+                                                                               "uid":  "T1550.001"
+                                                                           }
+                                                         }
+                                                     ],
+                                   "owasp_agentic":  [
+                                                         {
+                                                             "name":  "Identity \u0026 Privilege Abuse",
+                                                             "uid":  "ASI03",
+                                                             "version":  "2026"
+                                                         }
+                                                     ]
+                               }
+                },
+    "phase":  9,
+    "resource":  "http://mcp-server:8000/mcp",
+    "result":  "passed",
+    "token_exported":  false,
+    "token_fingerprint":  "6035a19e292e68b8"
+}

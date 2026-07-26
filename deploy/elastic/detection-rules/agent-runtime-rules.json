@@ -1,0 +1,67 @@
+{
+  "pack": {
+    "id": "arsl-agent-runtime-v1",
+    "name": "Agent Runtime Security Detection Pack",
+    "version": 1,
+    "minimum_elastic_version": "9.4.0",
+    "schema": "OCSF 1.8.0"
+  },
+  "rules": [
+    {
+      "id": "arsl-denied-process-execution",
+      "name": "Process Execution After Agent Policy Deny",
+      "description": "Detects a process observed by the runtime sensor after the agent gateway denied execution.",
+      "severity": "critical",
+      "risk_score": 95,
+      "interval": "1m",
+      "from": "now-2m",
+      "tags": ["Agent Security", "OCSF", "eBPF", "OWASP ASI05", "MITRE T1059"],
+      "owasp_agentic": [
+        {"uid": "ASI05", "name": "Unexpected Code Execution (RCE)", "version": "2026"},
+        {"uid": "ASI02", "name": "Tool Misuse & Exploitation", "version": "2026"}
+      ],
+      "mitre_attack": [
+        {
+          "tactic": {"uid": "TA0002", "name": "Execution"},
+          "technique": {"uid": "T1059", "name": "Command and Scripting Interpreter"}
+        }
+      ],
+      "query": "FROM arsl-ocsf-* METADATA _id\n| WHERE class_uid == 2004 AND is_alert == true AND unmapped.security.event_type == \"process_exec\" AND unmapped.security.policy_action == \"deny\"\n| KEEP _id, @timestamp, metadata.uid, severity, finding_info.types, unmapped.security.event_type, unmapped.security.policy_action, unmapped.security.intent_id\n| LIMIT 100"
+    },
+    {
+      "id": "arsl-network-before-approval",
+      "name": "Outbound Connection Before Human Approval",
+      "description": "Detects outbound runtime activity while an external transfer request is still held for human review.",
+      "severity": "critical",
+      "risk_score": 90,
+      "interval": "1m",
+      "from": "now-2m",
+      "tags": ["Agent Security", "OCSF", "eBPF", "OWASP ASI02", "MITRE T1041"],
+      "owasp_agentic": [
+        {"uid": "ASI02", "name": "Tool Misuse & Exploitation", "version": "2026"}
+      ],
+      "mitre_attack": [
+        {
+          "tactic": {"uid": "TA0010", "name": "Exfiltration"},
+          "technique": {"uid": "T1041", "name": "Exfiltration Over C2 Channel"}
+        }
+      ],
+      "query": "FROM arsl-ocsf-* METADATA _id\n| WHERE class_uid == 2004 AND is_alert == true AND unmapped.security.event_type == \"network_connect\" AND unmapped.security.policy_action == \"review\"\n| KEEP _id, @timestamp, metadata.uid, severity, finding_info.types, unmapped.security.event_type, unmapped.security.policy_action, unmapped.security.intent_id\n| LIMIT 100"
+    },
+    {
+      "id": "arsl-orphan-runtime-activity",
+      "name": "Runtime Activity Without Agent Intent",
+      "description": "Detects runtime behavior for which the gateway has no matching agent intent.",
+      "severity": "high",
+      "risk_score": 80,
+      "interval": "1m",
+      "from": "now-2m",
+      "tags": ["Agent Security", "OCSF", "eBPF", "OWASP ASI10"],
+      "owasp_agentic": [
+        {"uid": "ASI10", "name": "Rogue Agents", "version": "2026"}
+      ],
+      "mitre_attack": [],
+      "query": "FROM arsl-ocsf-* METADATA _id\n| WHERE class_uid == 2004 AND is_alert == true AND finding_info.types == \"orphan_runtime_activity\"\n| KEEP _id, @timestamp, metadata.uid, severity, finding_info.types, unmapped.security.event_type, unmapped.security.policy_action, unmapped.security.intent_id\n| LIMIT 100"
+    }
+  ]
+}

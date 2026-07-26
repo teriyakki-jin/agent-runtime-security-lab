@@ -1,0 +1,8 @@
+{
+  "name": "ARSL Teams SOC",
+  "connector_type_id": ".teams",
+  "config": {},
+  "secrets": {
+    "webhookUrl": "${TEAMS_WEBHOOK_URL}"
+  }
+}

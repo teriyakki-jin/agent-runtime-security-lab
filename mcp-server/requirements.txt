@@ -1,4 +1,5 @@
-mcp[cli]==1.27.2
-opentelemetry-api>=1.30,<2
-opentelemetry-sdk>=1.30,<2
-opentelemetry-exporter-otlp-proto-grpc>=1.30,<2
+mcp[cli]==1.28.1
+PyJWT[crypto]==2.13.0
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp-proto-grpc==1.44.0

@@ -1,0 +1,75 @@
+{
+    "phase":  11,
+    "result":  "passed",
+    "elastic":  {
+                    "version":  "9.4.2",
+                    "license":  "basic",
+                    "alert_index":  ".alerts-security.alerts-default"
+                },
+    "connector":  {
+                      "id":  "arsl-soc-notifications",
+                      "type":  ".index",
+                      "minimum_license":  "basic",
+                      "notification_index":  "arsl-notifications-v1"
+                  },
+    "rules":  [
+                  {
+                      "rule_id":  "arsl-native-orphan-runtime-activity",
+                      "type":  "esql",
+                      "enabled":  true,
+                      "interval":  "1m",
+                      "from":  "now-2m",
+                      "last_execution":  "succeeded"
+                  },
+                  {
+                      "rule_id":  "arsl-native-denied-process-execution",
+                      "type":  "esql",
+                      "enabled":  true,
+                      "interval":  "1m",
+                      "from":  "now-2m",
+                      "last_execution":  "succeeded"
+                  },
+                  {
+                      "rule_id":  "arsl-native-network-before-approval",
+                      "type":  "esql",
+                      "enabled":  true,
+                      "interval":  "1m",
+                      "from":  "now-2m",
+                      "last_execution":  "succeeded"
+                  }
+              ],
+    "delivery":  {
+                     "native_alerts_created":  3,
+                     "notifications_created":  3,
+                     "alerts_after_replay":  3,
+                     "notifications_after_replay":  3
+                 },
+    "external_channels":  {
+                              "slack":  {
+                                            "configured":  false,
+                                            "minimum_license":  "gold",
+                                            "template":  "deploy/elastic/connectors/slack.example.json"
+                                        },
+                              "teams":  {
+                                            "configured":  false,
+                                            "minimum_license":  "gold",
+                                            "template":  "deploy/elastic/connectors/teams.example.json"
+                                        }
+                          },
+    "privacy":  {
+                    "raw_arguments_exported":  false,
+                    "raw_runtime_targets_exported":  false,
+                    "connector_secrets_exported":  false
+                },
+    "checks":  {
+                   "three_native_esql_rules_enabled":  true,
+                   "scheduled_execution_succeeded":  true,
+                   "basic_index_connector_enabled":  true,
+                   "three_attack_classes_alerted":  true,
+                   "notifications_delivered":  true,
+                   "duplicate_alerts_suppressed":  true,
+                   "duplicate_notifications_suppressed":  true,
+                   "notification_payload_redacted":  true,
+                   "slack_teams_templates_present":  true
+               }
+}

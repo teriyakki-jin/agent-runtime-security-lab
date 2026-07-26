@@ -1,0 +1,30 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: arsl-runtime-observation
+spec:
+  kprobes:
+    - call: security_file_permission
+      syscall: false
+      args:
+        - index: 0
+          type: file
+        - index: 1
+          type: int
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /app/documents/
+      tags:
+        - observability.filesystem
+        - agent-runtime-security-lab
+    - call: tcp_connect
+      syscall: false
+      args:
+        - index: 0
+          type: sock
+      tags:
+        - observability.network
+        - agent-runtime-security-lab

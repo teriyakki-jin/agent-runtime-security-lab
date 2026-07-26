@@ -1,0 +1,63 @@
+{
+  "phase": 5,
+  "validated_at": "2026-07-24T03:46:20Z",
+  "environment": {
+    "docker_engine": "24.0.6",
+    "platform": "Docker Desktop WSL2",
+    "ports": {
+      "elasticsearch": 19200,
+      "kibana": 15601,
+      "logstash": 19600
+    }
+  },
+  "stack": {
+    "elasticsearch": {
+      "version": "9.4.2",
+      "image_digest": "sha256:be5f49784ff5ec8a5b5d7ba17f944d9d6b10c067f596ee93e6b6cb82d2dd874c",
+      "health": "green"
+    },
+    "kibana": {
+      "version": "9.4.2",
+      "image_digest": "sha256:b9749a7672939d1a96dd9c99b86fd84634aab8d03b0889f02177d881aea3eb01",
+      "status": "available"
+    },
+    "logstash": {
+      "version": "9.4.2",
+      "image_digest": "sha256:532fa8633866e231d14b8e8860488f224f7f354bc63b43b099ddf2a3a87e2845",
+      "pipeline": "main",
+      "input": "http_poller"
+    }
+  },
+  "ocsf": {
+    "schema_version": "1.8.0",
+    "index": "arsl-ocsf-2026.07.24",
+    "documents": 9,
+    "unique_metadata_uids": 9,
+    "api_activity_documents": 5,
+    "detection_finding_documents": 4,
+    "critical_alerts": 2,
+    "document_id_source": "metadata.uid",
+    "repeat_poll_count_before": 9,
+    "repeat_poll_count_after_12_seconds": 9
+  },
+  "controls": {
+    "index_template": "arsl-ocsf",
+    "retention_policy": "arsl-ocsf-7d",
+    "retention_days": 7,
+    "loopback_only_ports": true,
+    "raw_sensitive_values_found": false,
+    "dashboard_imported": true,
+    "dashboard_rendered": true
+  },
+  "runtime_evidence": {
+    "sensor": "Tetragon v1.7.0",
+    "file_access_result": "intent_runtime_match",
+    "process_bypass_result": "policy_runtime_mismatch",
+    "process_bypass_severity": "Critical",
+    "correlation": "container_time_window"
+  },
+  "screenshot": {
+    "path": "docs/screenshots/phase5-soc-overview.png",
+    "sha256": "4222b9478ec25c75595a1b2fac9f64e5f47c43761ddbd5f785279218766e36d3"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "phase": 6,
+  "validated_at": "2026-07-24",
+  "environment": {
+    "host": "Windows Docker Desktop WSL2",
+    "elasticsearch": "9.4.2",
+    "kibana": "9.4.2",
+    "logstash": "9.4.2",
+    "ocsf": "1.8",
+    "owasp_agentic": "2026"
+  },
+  "rule_pack": {
+    "id": "arsl-agent-runtime-v1",
+    "rule_count": 3,
+    "query_language": "ES|QL"
+  },
+  "results": {
+    "alert_count": 10,
+    "unique_rule_source_pairs": 10,
+    "critical_alert_count": 8,
+    "rules": {
+      "arsl-denied-process-execution": 6,
+      "arsl-network-before-approval": 2,
+      "arsl-orphan-runtime-activity": 2
+    },
+    "owasp_agentic_ids": ["ASI02", "ASI05", "ASI10"],
+    "mitre_attack_technique_ids": ["T1041", "T1059"],
+    "repeat_run": {
+      "before": 10,
+      "after": 10,
+      "duplicate_alerts": 0
+    },
+    "raw_sensitive_values_detected": false,
+    "dashboard_rendered": true
+  },
+  "artifacts": {
+    "screenshot": "docs/screenshots/phase6-threat-detection.png",
+    "screenshot_sha256": "1c3f04d7a2aae8396e80706c1ee34a749d13e6419bb10c3f5f4b9dfd575bb41b",
+    "rules": "deploy/elastic/detection-rules/agent-runtime-rules.json",
+    "dashboard": "deploy/kibana/arsl-threat-dashboard.ndjson"
+  }
+}

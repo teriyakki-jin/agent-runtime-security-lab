@@ -1,0 +1,8 @@
+{
+  "name": "ARSL Slack SOC",
+  "connector_type_id": ".slack",
+  "config": {},
+  "secrets": {
+    "webhookUrl": "${SLACK_WEBHOOK_URL}"
+  }
+}

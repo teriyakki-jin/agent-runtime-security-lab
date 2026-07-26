@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ARSL Phase 15 Portfolio Release</title>
+  <style>
+    :root{--bg:#06111f;--panel:#0c1d31;--line:#1d3c59;--text:#f4f8ff;--muted:#8fb7d9;--cyan:#29e6e6;--green:#46f5a5;--amber:#ffc857}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 90% 0,#123353 0,#06111f 44%);color:var(--text);font-family:Segoe UI,Arial,sans-serif}
+    main{width:1440px;height:900px;padding:42px 52px;overflow:hidden}.eyebrow{color:var(--cyan);font-size:13px;font-weight:800;letter-spacing:2px}.top{display:flex;justify-content:space-between;align-items:flex-start}.top h1{font-size:38px;margin:15px 0 7px}.top p{margin:0;color:var(--muted);font-size:17px}.badge{border:1px solid #168b63;background:#082b28;color:var(--green);padding:11px 18px;border-radius:30px;font-weight:800}
+    .flow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}.stage{background:linear-gradient(145deg,#102840,#0a1829);border:1px solid var(--line);border-radius:15px;padding:18px 20px;min-height:126px}.stage small{color:var(--cyan);font-weight:800;letter-spacing:1px}.stage h2{font-size:21px;margin:9px 0}.stage p{font-size:14px;color:var(--muted);line-height:1.6;margin:0}.arrow{color:var(--green);float:right}
+    .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.panel{background:#0a1a2c;border:1px solid var(--line);border-radius:16px;padding:20px}.panel h3{margin:0 0 14px;font-size:19px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{border:1px solid #234663;border-radius:12px;padding:14px;background:#081625}.metric strong{display:block;color:var(--green);font-size:25px}.metric span{font-size:11px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid #19354f}th{color:#8fc9ff;font-size:11px;text-transform:uppercase}.pass{color:var(--green);font-weight:800}.tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.tag{font-size:11px;padding:7px 10px;border:1px solid #168b63;color:var(--green);border-radius:20px}.footer{display:flex;justify-content:space-between;margin-top:15px;font-size:11px;color:#7fb4d8}
+  </style>
+</head>
+<body><main>
+  <div class="top"><div><div class="eyebrow">AGENT RUNTIME SECURITY LAB · FINAL RELEASE</div><h1>Phase 15 · Measured Agent Security</h1><p>실행 전 → 실행 중 → 실행 후 통제를 실제 fixture와 SLO로 검증</p></div><div class="badge">● RELEASE GATE PASSED</div></div>
+  <section class="flow">
+    <article class="stage"><small>01 · BEFORE <span class="arrow">→</span></small><h2>Prevent</h2><p>Keyless admission · Rekor<br>SBOM / signed tools/list<br>Prompt provenance · OAuth scope</p></article>
+    <article class="stage"><small>02 · DURING <span class="arrow">→</span></small><h2>Detect</h2><p>OPA execution boundary<br>Tetragon + workload identity<br>Explicit causal attack graph</p></article>
+    <article class="stage"><small>03 · AFTER</small><h2>Respond & Prove</h2><p>OCSF + Elastic alert<br>Token revoke · isolation · recovery<br>Sanitized audit evidence</p></article>
+  </section>
+  <section class="grid">
+    <article class="panel"><h3>Measured acceptance</h3><div class="metrics">
+      <div class="metric"><strong>21.211 ms</strong><span>POLICY P95 · SLO ≤ 250</span></div><div class="metric"><strong>27.964 ms</strong><span>POLICY P99 · SLO ≤ 500</span></div><div class="metric"><strong>26.179 ms</strong><span>DETECTION P95 · SLO ≤ 1000</span></div>
+      <div class="metric"><strong>2.9 s</strong><span>DETECT-TO-BLOCK · SLO ≤ 5</span></div><div class="metric"><strong>100%</strong><span>RECALL · TP 6 / FN 0</span></div><div class="metric"><strong>0%</strong><span>FPR · FP 0 / TN 6</span></div>
+      <div class="metric"><strong>1.5%</strong><span>PEAK CONTAINER CPU</span></div><div class="metric"><strong>64.06 MiB</strong><span>PEAK CONTAINER MEMORY</span></div><div class="metric"><strong>81.33%</strong><span>BRANCH COVERAGE</span></div>
+    </div></article>
+    <article class="panel"><h3>Threat → Control → Evidence</h3><table><thead><tr><th>Threat</th><th>Control</th><th>Evidence</th></tr></thead><tbody>
+      <tr><td>Prompt injection</td><td>Provenance guard</td><td class="pass">BLOCKED</td></tr><tr><td>Token abuse</td><td>Scope + revocation</td><td class="pass">INACTIVE</td></tr><tr><td>Tool drift</td><td>Signed tools/list</td><td class="pass">MATCHED</td></tr><tr><td>Runtime bypass</td><td>eBPF + identity</td><td class="pass">DETECTED</td></tr><tr><td>Repeat response</td><td>Response key + TTL</td><td class="pass">DEDUPED</td></tr><tr><td>Residual resources</td><td>Verified teardown</td><td class="pass">0 LEFT</td></tr>
+    </tbody></table><div class="tags"><span class="tag">12 FIXTURES</span><span class="tag">19 TESTS</span><span class="tag">NO SECRETS</span><span class="tag">FULL TEARDOWN</span></div></article>
+  </section>
+  <div class="footer"><span>OAuth 2.1 · OPA · Tetragon · Kubernetes · OCSF · Elastic · Cosign · Docker</span><span>PREVENT ✓ DETECT ✓ RESPOND ✓ RECOVER ✓ PROVE ✓</span></div>
+</main></body></html>

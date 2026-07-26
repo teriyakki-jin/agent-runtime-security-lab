@@ -6,9 +6,9 @@ services:
     container_name: arsl-opa
     command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
     volumes:
-      - ./policy:/policies:ro
+      - ${ARSL_PROJECT_ROOT:-.}/policy:/policies:ro
     ports:
-      - "127.0.0.1:8181:8181"
+      - "${ARSL_BIND_ADDRESS:-127.0.0.1}:8181:8181"
     networks:
       - agent_net
     restart: unless-stopped
@@ -22,18 +22,50 @@ services:
       - agent_net
     restart: unless-stopped
 
+  auth-server:
+    build:
+      context: ./auth-server
+    container_name: arsl-auth-server
+    environment:
+      OAUTH_ISSUER: http://auth-server:9000
+      MCP_RESOURCE: http://mcp-server:8000/mcp
+      MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+      MCP_OAUTH_INTROSPECTION_SECRET: ${MCP_OAUTH_INTROSPECTION_SECRET:-}
+      INCIDENT_RESPONSE_CLIENT_SECRET: ${INCIDENT_RESPONSE_CLIENT_SECRET:-}
+    ports:
+      - "127.0.0.1:19000:9000"
+    networks:
+      - agent_net
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
   mcp-server:
     build:
       context: ./mcp-server
     container_name: arsl-mcp-server
     environment:
+      APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
+      OAUTH_ISSUER: http://auth-server:9000
+      OAUTH_JWKS_URL: http://auth-server:9000/jwks.json
+      OAUTH_INTROSPECTION_URL: http://auth-server:9000/introspect
+      MCP_OAUTH_INTROSPECTION_SECRET: ${MCP_OAUTH_INTROSPECTION_SECRET:-}
+      MCP_RESOURCE: http://mcp-server:8000/mcp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: mcp-tool-server
-    ports:
-      - "127.0.0.1:8001:8000"
+    expose:
+      - "8000"
     networks:
       - agent_net
+    labels:
+      com.arsl.phase14.managed: "true"
     depends_on:
+      - auth-server
       - jaeger
     read_only: true
     tmpfs:
@@ -49,6 +81,12 @@ services:
       context: ./agent-api
     container_name: arsl-agent-api
     environment:
+      APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
+      RUNTIME_SENSOR_HMAC_KEY: ${RUNTIME_SENSOR_HMAC_KEY:-}
+      MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+      MCP_OAUTH_TOKEN_URL: http://auth-server:9000/token
+      MCP_RESOURCE: http://mcp-server:8000/mcp
+      APPROVAL_TTL_SECONDS: 300
       MCP_SERVER_URL: http://mcp-server:8000/mcp
       OPA_DECISION_URL: http://opa:8181/v1/data/agent_security/decision
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
@@ -58,6 +96,7 @@ services:
     networks:
       - agent_net
     depends_on:
+      - auth-server
       - jaeger
       - mcp-server
       - opa
@@ -70,6 +109,117 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
+    container_name: arsl-elasticsearch
+    profiles: ["soc"]
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.enrollment.enabled: "false"
+      xpack.ml.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:${ARSL_ELASTICSEARCH_PORT:-19200}:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - agent_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.4.2
+    container_name: arsl-logstash
+    profiles: ["soc"]
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      XPACK_MONITORING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${ARSL_LOGSTASH_PORT:-19600}:9600"
+    volumes:
+      - ./deploy/logstash/pipeline:/usr/share/logstash/pipeline:ro
+    networks:
+      - agent_net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.4.2
+    container_name: arsl-kibana
+    profiles: ["soc"]
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      XPACK_SECURITY_ENABLED: "false"
+      XPACK_SECURITY_SHOWINSECURECLUSTERWARNING: "false"
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${ARSL_KIBANA_ENCRYPTION_KEY:-arsl-local-only-encryption-key-change-me}
+      TELEMETRY_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=768
+    ports:
+      - "127.0.0.1:${ARSL_KIBANA_PORT:-15601}:5601"
+    networks:
+      - agent_net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5601/api/status >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  local-llm:
+    image: ghcr.io/ggml-org/llama.cpp@sha256:4f02c560799a1569be08b0183d52b94b0d4a6e4b88f52f20562d2334c73837d4
+    container_name: arsl-local-llm
+    profiles: ["llm"]
+    command:
+      - --hf-repo
+      - ${ARSL_LLM_MODEL:-Qwen/Qwen3-0.6B-GGUF:Q8_0}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --ctx-size
+      - "2048"
+      - --n-predict
+      - "256"
+      - --jinja
+      - --api-key
+      - ${ARSL_LLM_API_KEY:-local-lab-only}
+    ports:
+      - "127.0.0.1:${ARSL_LLM_PORT:-18081}:8080"
+    volumes:
+      - llm-model-cache:/root/.cache/huggingface
+    networks:
+      - agent_net
+    restart: unless-stopped
+
+  registry:
+    image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+    container_name: arsl-registry
+    profiles: ["supply-chain"]
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    ports:
+      - "${ARSL_BIND_ADDRESS:-127.0.0.1}:${ARSL_REGISTRY_PORT:-15000}:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - agent_net
+    restart: unless-stopped
+
 networks:
   agent_net:
     driver: bridge
+
+volumes:
+  elasticsearch-data:
+  llm-model-cache:
+  registry-data:

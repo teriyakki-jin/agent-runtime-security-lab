@@ -1,0 +1,155 @@
+name: Keyless Supply Chain
+
+on:
+  push:
+    branches:
+      - main
+      - agent/phase-13-keyless-admission
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: phase13-supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COSIGN_VERSION: v3.1.2
+  SYFT_VERSION: 1.49.0
+  GRYPE_VERSION: 0.116.0
+  TOOL_MANIFEST_TYPE: https://agent-runtime-security.dev/attestations/mcp-tool-manifest/v1
+  OIDC_ISSUER: https://token.actions.githubusercontent.com
+
+jobs:
+  keyless-admission:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out immutable workflow input
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
+      - name: Install checksum-verified Syft and Grype
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime/phase13/tools
+          cd runtime/phase13/tools
+          syft_asset="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          grype_asset="grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${syft_asset}"
+          curl -fsSLo syft_checksums.txt "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_checksums.txt"
+          grep " ${syft_asset}$" syft_checksums.txt | sha256sum --check --strict
+          curl -fsSLO "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/${grype_asset}"
+          curl -fsSLo grype_checksums.txt "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_checksums.txt"
+          grep " ${grype_asset}$" grype_checksums.txt | sha256sum --check --strict
+          tar -xzf "${syft_asset}" syft
+          tar -xzf "${grype_asset}" grype
+
+      - name: Authenticate to GHCR without stored credentials
+        shell: bash
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build hash-locked MCP image and push commit tag
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/mcp-server"
+          manifest_hash="$(python -c 'from pathlib import Path; from supply_chain.gate import canonical_manifest_sha256,load_manifest; print(canonical_manifest_sha256(load_manifest(Path("deploy/supply-chain/trusted-mcp-tools.json"))))')"
+          docker build --pull=false \
+            --build-arg "ARSL_TOOL_MANIFEST_SHA256=${manifest_hash}" \
+            --tag "${image}:${GITHUB_SHA}" mcp-server
+          docker push "${image}:${GITHUB_SHA}"
+          pinned="$(docker image inspect --format '{{index .RepoDigests 0}}' "${image}:${GITHUB_SHA}")"
+          test "${pinned}" = "${image}@sha256:${pinned##*@sha256:}"
+          echo "repository=${image}" >> "${GITHUB_OUTPUT}"
+          echo "pinned=${pinned}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate SBOM and enforce vulnerability, license, and component policy
+        shell: bash
+        env:
+          PINNED_IMAGE: ${{ steps.image.outputs.pinned }}
+        run: |
+          set -euo pipefail
+          runtime/phase13/tools/syft "${PINNED_IMAGE}" --from docker --output cyclonedx-json=runtime/phase13/sbom.cdx.json
+          runtime/phase13/tools/grype "sbom:runtime/phase13/sbom.cdx.json" --output json --file runtime/phase13/grype.json
+          python -m supply_chain.sbom_policy \
+            --sbom runtime/phase13/sbom.cdx.json \
+            --vulnerabilities runtime/phase13/grype.json \
+            --policy deploy/supply-chain/sbom-policy.json \
+            --output runtime/phase13/sbom-policy-result.json
+
+      - name: Query actual MCP tools/list in isolated pre-admission
+        shell: bash
+        env:
+          PINNED_IMAGE: ${{ steps.image.outputs.pinned }}
+        run: |
+          set -euo pipefail
+          python -m venv runtime/phase13/probe-venv
+          runtime/phase13/probe-venv/bin/pip install --disable-pip-version-check --require-hashes -r mcp-server/requirements.lock
+          runtime/phase13/probe-venv/bin/python -m supply_chain.probe \
+            --image "${PINNED_IMAGE}" \
+            --manifest deploy/supply-chain/trusted-mcp-tools.json \
+            --output runtime/phase13/inventory-result.json
+
+      - name: Keyless sign image and attach signed policies
+        shell: bash
+        env:
+          PINNED_IMAGE: ${{ steps.image.outputs.pinned }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${PINNED_IMAGE}"
+          cosign attest --yes --type cyclonedx --predicate runtime/phase13/sbom.cdx.json "${PINNED_IMAGE}"
+          cosign attest --yes --type "${TOOL_MANIFEST_TYPE}" --predicate deploy/supply-chain/trusted-mcp-tools.json "${PINNED_IMAGE}"
+
+      - name: Verify repository, workflow, ref identity and Rekor inclusion
+        shell: bash
+        env:
+          PINNED_IMAGE: ${{ steps.image.outputs.pinned }}
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
+          cosign verify "${PINNED_IMAGE}" \
+            --certificate-identity="${identity}" \
+            --certificate-oidc-issuer="${OIDC_ISSUER}" \
+            --output json > runtime/phase13/signature-verification.json
+          cosign verify-attestation "${PINNED_IMAGE}" \
+            --type cyclonedx \
+            --certificate-identity="${identity}" \
+            --certificate-oidc-issuer="${OIDC_ISSUER}" > /dev/null
+          cosign verify-attestation "${PINNED_IMAGE}" \
+            --type "${TOOL_MANIFEST_TYPE}" \
+            --certificate-identity="${identity}" \
+            --certificate-oidc-issuer="${OIDC_ISSUER}" > /dev/null
+          python -m supply_chain.gate \
+            --image "${PINNED_IMAGE}" \
+            --manifest deploy/supply-chain/trusted-mcp-tools.json \
+            --certificate-identity "${identity}" \
+            --certificate-oidc-issuer "${OIDC_ISSUER}" \
+            --output runtime/phase13/gate-result.json
+
+      - name: Launch only the digest emitted by the gate
+        shell: bash
+        env:
+          REQUESTED_IMAGE: ${{ steps.image.outputs.repository }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python -m supply_chain.launcher \
+            --requested-image "${REQUESTED_IMAGE}" \
+            --gate-result runtime/phase13/gate-result.json \
+            --inventory-result runtime/phase13/inventory-result.json \
+            --sbom-policy-result runtime/phase13/sbom-policy-result.json \
+            --name arsl-phase13-admitted \
+            --network none
+          admitted="$(python -c 'import json; print(json.load(open("runtime/phase13/gate-result.json"))["image"]["repository"] + "@" + json.load(open("runtime/phase13/gate-result.json"))["image"]["digest"])')"
+          test "$(docker inspect --format '{{.Config.Image}}' arsl-phase13-admitted)" = "${admitted}"
+          docker rm -f arsl-phase13-admitted
