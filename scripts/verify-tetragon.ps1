@@ -102,7 +102,7 @@ function Submit-TetragonCapture {
         [string]$ContainerAlias
     )
 
-    & $PythonExe sensor/tetragon_adapter.py `
+    & $PythonExe -m sensor.tetragon_adapter `
         --input $Path `
         --gateway http://127.0.0.1:8080 `
         --container-alias $ContainerAlias `

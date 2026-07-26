@@ -3,7 +3,7 @@
   "result": "passed",
   "image": {
     "repository": "local-registry/arsl/mcp-server",
-    "digest": "sha256:baa11174c11c939e69e88d09402bd510125661e793de31c0289d362e00a96a77"
+    "digest": "sha256:a46db77f978a42cf7cb1f9a341c3e8417ea6a8dcd12cf05fc1d9a3d6ac6f7397"
   },
   "inventory": {
     "expected": 3,

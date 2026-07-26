@@ -99,7 +99,7 @@
     "raw_tool_arguments_exported": false,
     "container_id_exported": false
   },
-  "generated_at": "2026-07-26T08:24:50.496008Z",
+  "generated_at": "2026-07-26T10:09:16.270443Z",
   "control_stages": {
     "before": [
       "Cosign keyless admission",
@@ -109,7 +109,7 @@
     "during": [
       "OPA execution boundary",
       "Tetragon runtime identity",
-      "causal multi-agent detection"
+      "delegated-agent causal attack detection"
     ],
     "after": [
       "OCSF and Elastic alert evidence",

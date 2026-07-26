@@ -208,7 +208,7 @@ def assemble_portfolio_evidence(
                 "during": [
                     "OPA execution boundary",
                     "Tetragon runtime identity",
-                    "causal multi-agent detection",
+                    "delegated-agent causal attack detection",
                 ],
                 "after": [
                     "OCSF and Elastic alert evidence",

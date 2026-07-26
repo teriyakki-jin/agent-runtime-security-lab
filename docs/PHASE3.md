@@ -83,7 +83,7 @@ kubectl apply -f deploy/tetragon/runtime-observation.yaml
 Adapter dry run:
 
 ```bash
-tetra getevents -o json | python sensor/tetragon_adapter.py \
+tetra getevents -o json | python -m sensor.tetragon_adapter \
   --intent-id '<intent-id>' --dry-run
 ```
 
