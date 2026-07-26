@@ -15,13 +15,58 @@ from pydantic import AnyHttpUrl
 OAUTH_ISSUER = os.getenv("OAUTH_ISSUER", "http://auth-server:9000").rstrip("/")
 MCP_RESOURCE = os.getenv("MCP_RESOURCE", "http://mcp-server:8000/mcp")
 JWKS_URL = os.getenv("OAUTH_JWKS_URL", f"{OAUTH_ISSUER}/jwks.json")
+INTROSPECTION_URL = os.getenv(
+    "OAUTH_INTROSPECTION_URL", f"{OAUTH_ISSUER}/introspect"
+)
+INTROSPECTION_SECRET = os.getenv("MCP_OAUTH_INTROSPECTION_SECRET", "")
+
+
+class RevocationClient:
+    """Fail-closed OAuth introspection client used for immediate jti revocation."""
+
+    def __init__(self, *, url: str, client_secret: str) -> None:
+        self.url = url
+        self.client_secret = client_secret
+
+    async def is_active(self, token: str, expected_jti: str | None = None) -> bool:
+        if len(self.client_secret) < 32:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.post(
+                    self.url,
+                    data={
+                        "token": token,
+                        "client_id": "arsl-mcp-server",
+                        "client_secret": self.client_secret,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+            if not isinstance(payload, dict):
+                return False
+            if payload.get("active") is not True:
+                return False
+            if expected_jti is not None and payload.get("jti") != expected_jti:
+                return False
+            return True
+        except (httpx.HTTPError, RuntimeError, TypeError, ValueError):
+            return False
 
 
 class JwtTokenVerifier(TokenVerifier):
-    def __init__(self, cache_seconds: int = 300) -> None:
+    def __init__(
+        self,
+        cache_seconds: int = 300,
+        revocation_client: RevocationClient | None = None,
+    ) -> None:
         self.cache_seconds = cache_seconds
         self._jwks: dict[str, Any] | None = None
         self._loaded_at = 0.0
+        self.revocation_client = revocation_client or RevocationClient(
+            url=INTROSPECTION_URL,
+            client_secret=INTROSPECTION_SECRET,
+        )
 
     async def _load_jwks(self, force: bool = False) -> dict[str, Any]:
         if not force and self._jwks and time.monotonic() - self._loaded_at < self.cache_seconds:
@@ -57,6 +102,8 @@ class JwtTokenVerifier(TokenVerifier):
                 issuer=OAUTH_ISSUER,
                 options={"require": ["iss", "sub", "aud", "exp", "iat", "client_id", "scope", "jti"]},
             )
+            if not await self.revocation_client.is_active(token, str(claims["jti"])):
+                return None
             scopes = sorted(set(str(claims["scope"]).split()))
             return AccessToken(
                 token=token,
@@ -65,7 +112,13 @@ class JwtTokenVerifier(TokenVerifier):
                 expires_at=int(claims["exp"]),
                 resource=MCP_RESOURCE,
                 subject=str(claims["sub"]),
-                claims={"iss": claims["iss"], "jti": claims["jti"]},
+                claims={
+                    "iss": claims["iss"],
+                    "jti": claims["jti"],
+                    "agent_id": claims.get("agent_id", claims["sub"]),
+                    "parent_jti": claims.get("parent_jti"),
+                    "delegation_depth": claims.get("delegation_depth", 0),
+                },
             )
         except (httpx.HTTPError, jwt.PyJWTError, KeyError, TypeError, ValueError):
             return None

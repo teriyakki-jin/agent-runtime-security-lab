@@ -365,6 +365,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admiss
 
 [Phase 13 보고서](docs/PHASE13.md), [진행 체크리스트](docs/PHASE13_PROGRESS.md), [비식별화된 검증 증거](docs/evidence/phase13-keyless-admission.json)를 제공합니다.
 
+## Phase 14 실행 — Causal Detection & Safe Response
+
+Phase 14는 명시적인 parent edge로 연결된 공격 체인만 자동 대응합니다. scope가 축소된 delegated agent token을 검증하고, Critical causal finding이 발생하면 OAuth token을 즉시 폐기한 뒤 관리 대상 MCP 컨테이너의 네트워크를 분리하고 pause합니다. 격리는 TTL로 자동 복구할 수 있으며 승인된 SOC reviewer가 hold·restore·extend를 제어합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase14-response.ps1
+```
+
+- issuer·audience·parent jti·scope narrowing을 검증하는 agent delegation chain
+- 시간 일치가 아닌 명시적 parent edge 기반 causal attack graph
+- OAuth token exchange, jti revocation, 요청별 fail-closed introspection
+- 관리 label·Compose project·64자리 container ID에 바인딩된 격리 대상
+- 실제 Docker network detach·container pause와 TTL 자동 복구
+- response key 기반 중복 억제와 승인된 human override
+- causal finding부터 container pause까지 detect-to-block MTTR 측정
+- 43개 관련 테스트와 Response Engine 80% 이상 coverage
+
+[Phase 14 보고서](docs/PHASE14.md), [진행 체크리스트](docs/PHASE14_PROGRESS.md), [비식별화된 검증 증거](docs/evidence/phase14-safe-response.json), [실행 화면](docs/screenshots/phase14-safe-response.png)을 제공합니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -377,6 +396,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admiss
 - **Container hardening**: non-root, read-only root filesystem, all capabilities dropped, `no-new-privileges`
 - **Fail closed**: OPA 장애 또는 잘못된 sensor signature는 요청 거부
 - **OAuth least privilege**: MCP resource audience와 도구별 scope를 모두 만족해야 실행
+- **Causal response**: 시간 근접성 대신 명시적 parent edge와 동일 agent·resource를 검증한 뒤 대응
+- **Immediate revocation**: 폐기된 OAuth jti 또는 introspection 장애를 MCP에서 fail-closed 차단
+- **Reversible isolation**: 관리 대상 container ID에만 TTL·human override 기반 network/container 격리 적용
 
 ## Validation
 
@@ -392,9 +414,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alerting.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-supply-chain.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admission.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase14-response.ps1
 ```
 
-기본 검증은 OPA, Agent API, MCP, OAuth, sensor, detection, Kubernetes attack-chain 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 13 공급망 모듈은 26개 테스트와 82% 커버리지를 통과하며, GitHub Actions에서는 keyless 서명·Rekor·실제 MCP admission까지 별도 검증합니다.
+기본 검증은 OPA, Agent API, MCP, OAuth, sensor, detection, Kubernetes attack-chain 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 13 공급망 모듈은 26개 테스트와 82% 커버리지를 통과합니다. Phase 14는 Response Engine·Authorization Server·MCP OAuth 관련 테스트 43개, Response Engine 80% 이상 coverage와 실제 token 폐기·container/network 격리·복구를 검증합니다.
 
 ## Tech stack
 
@@ -417,6 +440,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admiss
 | Kind + Kubernetes 1.36 | Reproducible workload identity and ServiceAccount lab |
 | Kubernetes Audit Log | RBAC privilege escalation and API-to-runtime attack chain |
 | OAuth 2.1 + RS256 JWT | MCP protected resource, PKCE and tool scopes |
+| Phase 14 Response Engine | Delegated identity, causal graph, token revocation, reversible Docker isolation |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -435,6 +459,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admiss
 - [x] OAuth 2.1 기반 MCP 인증 및 tool scope
 - [x] Local LLM indirect prompt injection 재현
 - [x] Elastic native detection scheduling과 license-aware alert connectors
+- [x] Cosign keyless MCP admission과 실제 `tools/list` 검증
+- [x] Agent delegated-token chain과 causal attack graph
+- [x] OAuth token 폐기와 가역적 container·network 격리
+- [x] 중복 대응 방지, TTL 복구, human override, MTTR 측정
 
 ## References
 
@@ -469,3 +497,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admiss
 Phase 8은 전용 `arsl-phase8` 클러스터와 `kubectl` impersonation만 사용하며 실제 ServiceAccount token을 발급하거나 저장하지 않습니다.
 
 Phase 9 Authorization Server는 로컬 lab 전용이며 signing key와 client secret을 실행 시 생성합니다. 발급된 bearer token과 authorization code는 Git에 저장하지 않습니다.
+
+Phase 14 자동 격리는 `com.arsl.phase14.managed=true` label과 예상 Compose project가 일치하는 컨테이너에만 적용합니다. 최초 inspect의 container ID를 복구까지 유지하고, token·client secret·raw jti는 evidence에 기록하지 않습니다.

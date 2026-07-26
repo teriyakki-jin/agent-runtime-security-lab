@@ -30,6 +30,8 @@ services:
       OAUTH_ISSUER: http://auth-server:9000
       MCP_RESOURCE: http://mcp-server:8000/mcp
       MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+      MCP_OAUTH_INTROSPECTION_SECRET: ${MCP_OAUTH_INTROSPECTION_SECRET:-}
+      INCIDENT_RESPONSE_CLIENT_SECRET: ${INCIDENT_RESPONSE_CLIENT_SECRET:-}
     ports:
       - "127.0.0.1:19000:9000"
     networks:
@@ -51,6 +53,8 @@ services:
       APPROVAL_HMAC_KEY: ${APPROVAL_HMAC_KEY:-}
       OAUTH_ISSUER: http://auth-server:9000
       OAUTH_JWKS_URL: http://auth-server:9000/jwks.json
+      OAUTH_INTROSPECTION_URL: http://auth-server:9000/introspect
+      MCP_OAUTH_INTROSPECTION_SECRET: ${MCP_OAUTH_INTROSPECTION_SECRET:-}
       MCP_RESOURCE: http://mcp-server:8000/mcp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: mcp-tool-server
@@ -58,6 +62,8 @@ services:
       - "8000"
     networks:
       - agent_net
+    labels:
+      com.arsl.phase14.managed: "true"
     depends_on:
       - auth-server
       - jaeger

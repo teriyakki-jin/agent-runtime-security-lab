@@ -36,6 +36,7 @@ jobs:
           python -m compileall -q detection
           python -m compileall -q kubernetes
           python -m compileall -q supply_chain
+          python -m compileall -q response_engine
 
       - name: Test Tetragon event adapter
         run: |
@@ -43,6 +44,7 @@ jobs:
           python -m unittest discover -s detection/tests -v
           python -m unittest discover -s kubernetes/tests -v
           python -m unittest discover -s supply_chain/tests -v
+          python -m unittest discover -s response_engine/tests -v
           python -m json.tool docs/evidence/phase4-tetragon-validation.json > /dev/null
           python -m json.tool docs/evidence/phase5-soc-validation.json > /dev/null
           python -m json.tool docs/evidence/phase6-threat-detection.json > /dev/null
@@ -53,6 +55,7 @@ jobs:
           python -m json.tool docs/evidence/phase11-native-alerting.json > /dev/null
           python -m json.tool docs/evidence/phase12-mcp-supply-chain.json > /dev/null
           python -m json.tool docs/evidence/phase13-keyless-admission.json > /dev/null
+          python -m json.tool docs/evidence/phase14-safe-response.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-notifications-template.json > /dev/null
@@ -170,6 +173,21 @@ jobs:
           assert phase13["local"]["exact_digest_launched"] is True
           assert phase13["github_keyless"]["rekor_required"] is True
           assert not any(phase13["privacy"].values())
+          phase14 = json.loads(Path("docs/evidence/phase14-safe-response.json").read_text())
+          assert phase14["result"] == "passed"
+          assert all(phase14["checks"].values())
+          assert phase14["identity"]["delegation_depth"] == 1
+          assert phase14["causal_graph"]["timestamp_only_match"] is False
+          assert phase14["response"]["final_state"] == "restored"
+          assert phase14["response"]["token_remains_revoked_after_restore"] is True
+          assert phase14["tests"]["passed"] == 43
+          assert phase14["tests"]["coverage_percent"] >= 80
+          assert not any(phase14["privacy"].values())
+          assert Path("docs/screenshots/phase14-safe-response.png").is_file()
+          assert Path("auth-server/requirements.lock").is_file()
+          auth_dockerfile = Path("auth-server/Dockerfile").read_text()
+          assert "python:3.12-slim@sha256:" in auth_dockerfile
+          assert "--require-hashes" in auth_dockerfile
           manifest = json.loads(Path("deploy/supply-chain/trusted-mcp-tools.json").read_text())
           assert manifest["schema_version"] == 2
           assert manifest["policy"]["require_signature"] is True
@@ -221,7 +239,10 @@ jobs:
 
       - name: Run container integration scenarios
         shell: pwsh
-        run: ./scripts/run-lab.ps1
+        run: |
+          ./scripts/run-lab.ps1
+          docker compose exec -T auth-server python -m unittest discover -s tests -v
+          docker compose exec -T mcp-server python -m unittest discover -s tests -p 'test_oauth.py' -v
 
       - name: Collect container logs on failure
         if: failure()

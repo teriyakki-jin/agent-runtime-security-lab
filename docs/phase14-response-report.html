@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARSL Phase 14 — Causal Detection &amp; Safe Response</title>
+  <style>
+    :root { color-scheme:dark; --bg:#07111f; --panel:#0d1b2d; --line:#20344d; --text:#eef5ff; --muted:#91a8c3; --cyan:#3ddbd9; --green:#55e6a5; --amber:#f7c66b; --red:#ff7185; --violet:#a78bfa; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 85% 0,#153b62 0,transparent 34%),var(--bg); color:var(--text); font:15px/1.45 Inter,"Segoe UI",sans-serif; }
+    main { width:1440px; min-height:900px; padding:42px 52px; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:26px; }
+    .eyebrow { color:var(--cyan); letter-spacing:.16em; font-size:12px; font-weight:800; }
+    h1 { margin:7px 0 4px; font-size:37px; letter-spacing:-.03em; }
+    .subtitle { color:var(--muted); font-size:17px; }
+    .status { padding:10px 16px; border:1px solid #286d5a; border-radius:999px; color:var(--green); background:#0b2b28; font-weight:800; }
+    .flow { display:grid; grid-template-columns:repeat(7,1fr); gap:9px; margin-bottom:20px; }
+    .stage { position:relative; min-height:104px; padding:15px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(145deg,#10243a,#0b1727); }
+    .stage:not(:last-child)::after { content:"→"; position:absolute; right:-13px; top:36px; z-index:2; color:var(--cyan); font-size:19px; }
+    .num { color:var(--cyan); font-size:10px; font-weight:900; }
+    .stage b { display:block; margin:7px 0 5px; font-size:14px; }
+    .stage small { color:var(--muted); font-size:11px; }
+    .grid { display:grid; grid-template-columns:1.12fr .88fr; gap:18px; }
+    .panel { border:1px solid var(--line); border-radius:16px; background:rgba(13,27,45,.95); padding:20px; }
+    h2 { margin:0 0 14px; font-size:18px; }
+    table { width:100%; border-collapse:collapse; }
+    th { color:var(--muted); text-align:left; font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+    td,th { padding:9px 8px; border-bottom:1px solid #172a41; }
+    td:last-child { color:var(--green); font-weight:700; }
+    .metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .metric { padding:14px; border-radius:12px; background:#091625; border:1px solid #1b3049; }
+    .metric strong { display:block; color:var(--green); font-size:27px; letter-spacing:-.03em; }
+    .metric span { color:var(--muted); font-size:11px; }
+    .response { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { padding:7px 10px; border-radius:999px; border:1px solid #28425e; color:#bcd0e6; font-size:11px; }
+    .pill.good { color:var(--green); border-color:#286d5a; }
+    .pill.warn { color:var(--amber); border-color:#6a542d; }
+    .footer { display:flex; justify-content:space-between; margin-top:18px; color:var(--muted); font-size:11px; }
+    .checks { color:var(--green); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="eyebrow">AGENT RUNTIME SECURITY LAB · PHASE 14</div>
+      <h1>Causal Detection &amp; Safe Response</h1>
+      <div class="subtitle">명시적 공격 인과관계가 확인된 경우에만 token을 폐기하고 runtime을 가역적으로 격리</div>
+    </div>
+    <div class="status">● END-TO-END PASSED</div>
+  </header>
+  <section class="flow">
+    <div class="stage"><span class="num">01</span><b>Root identity</b><small>Service token<br>RS256 JWT</small></div>
+    <div class="stage"><span class="num">02</span><b>Delegation</b><small>Parent jti<br>Scope narrowing</small></div>
+    <div class="stage"><span class="num">03</span><b>Causal graph</b><small>Explicit edges<br>Same agent/resource</small></div>
+    <div class="stage"><span class="num">04</span><b>Revoke</b><small>OAuth jti<br>Fail-closed introspection</small></div>
+    <div class="stage"><span class="num">05</span><b>Isolate</b><small>Network detach<br>Container pause</small></div>
+    <div class="stage"><span class="num">06</span><b>Reconcile</b><small>Idempotency<br>Isolation TTL</small></div>
+    <div class="stage"><span class="num">07</span><b>Recover</b><small>Human override<br>Audit evidence</small></div>
+  </section>
+  <section class="grid">
+    <div class="panel">
+      <h2>Threat → Control → Evidence</h2>
+      <table>
+        <thead><tr><th>Threat</th><th>Control</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td>시간 기반 오탐 연계</td><td>Explicit parent edge only</td><td>REJECTED</td></tr>
+          <tr><td>Delegated scope 확대</td><td>Parent jti + scope subset</td><td>DEPTH 1</td></tr>
+          <tr><td>탈취 token 재사용</td><td>Revoke + per-request introspection</td><td>INACTIVE</td></tr>
+          <tr><td>반복 격리 실행</td><td>SHA-256 response key</td><td>DEDUPED</td></tr>
+          <tr><td>다른 container 격리</td><td>Label + project + container ID</td><td>BOUND</td></tr>
+          <tr><td>영구 격리</td><td>TTL + reviewer override</td><td>RESTORED</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Validation evidence</h2>
+      <div class="metrics">
+        <div class="metric"><strong>43 / 43</strong><span>Phase 14 related tests</span></div>
+        <div class="metric"><strong>≥ 80%</strong><span>Response Engine coverage</span></div>
+        <div class="metric"><strong>3 / 2</strong><span>Causal events / explicit edges</span></div>
+        <div class="metric"><strong>1</strong><span>Duplicate response suppressed</span></div>
+        <div class="metric"><strong>&lt; 5 s</strong><span>Detect-to-block MTTR target</span></div>
+        <div class="metric"><strong>0</strong><span>Secrets exported</span></div>
+      </div>
+      <div class="response">
+        <span class="pill good">TOKEN REVOKED</span>
+        <span class="pill good">NETWORK RESTORED</span>
+        <span class="pill good">CONTAINER RESTORED</span>
+        <span class="pill warn">TOKEN REMAINS INACTIVE</span>
+      </div>
+    </div>
+  </section>
+  <div class="footer">
+    <span>OAuth 2.1 · RFC 7662 · RS256 · Python 3.12 · Docker Compose</span>
+    <span class="checks">CAUSAL PATH ✓ &nbsp; REVOCATION ✓ &nbsp; TTL RECOVERY ✓ &nbsp; HUMAN OVERRIDE ✓</span>
+  </div>
+</main>
+</body>
+</html>

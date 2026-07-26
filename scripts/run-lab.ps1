@@ -46,6 +46,26 @@ if (-not $env:MCP_OAUTH_CLIENT_SECRET) {
     }
     $env:MCP_OAUTH_CLIENT_SECRET = [Convert]::ToBase64String($OAuthSecretBytes)
 }
+if (-not $env:MCP_OAUTH_INTROSPECTION_SECRET) {
+    $IntrospectionBytes = New-Object byte[] 32
+    $IntrospectionRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $IntrospectionRandom.GetBytes($IntrospectionBytes)
+    } finally {
+        $IntrospectionRandom.Dispose()
+    }
+    $env:MCP_OAUTH_INTROSPECTION_SECRET = [Convert]::ToBase64String($IntrospectionBytes)
+}
+if (-not $env:INCIDENT_RESPONSE_CLIENT_SECRET) {
+    $ResponseSecretBytes = New-Object byte[] 32
+    $ResponseRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $ResponseRandom.GetBytes($ResponseSecretBytes)
+    } finally {
+        $ResponseRandom.Dispose()
+    }
+    $env:INCIDENT_RESPONSE_CLIENT_SECRET = [Convert]::ToBase64String($ResponseSecretBytes)
+}
 docker compose up -d --build
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose startup failed.'
