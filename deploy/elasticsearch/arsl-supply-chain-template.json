@@ -1,0 +1,33 @@
+{
+  "index_patterns": ["arsl-supply-chain-*"],
+  "priority": 530,
+  "version": 1,
+  "_meta": {
+    "project": "agent-runtime-security-lab",
+    "phase": 12,
+    "source": "MCP supply-chain trust gate"
+  },
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "arsl-ocsf-7d"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "@timestamp": {"type": "date"},
+        "phase": {"type": "integer"},
+        "event_type": {"type": "keyword"},
+        "decision": {"type": "keyword"},
+        "scenario": {"type": "keyword"},
+        "reason_code": {"type": "keyword"},
+        "digest": {"type": "keyword", "ignore_above": 128},
+        "control": {"type": "keyword"},
+        "passed": {"type": "boolean"},
+        "executed": {"type": "boolean"},
+        "risk_score": {"type": "integer"}
+      }
+    }
+  }
+}

@@ -20,6 +20,7 @@ jobs:
           docker compose config --quiet
           docker compose --profile soc config --quiet
           docker compose --profile llm config --quiet
+          docker compose --profile supply-chain config --quiet
 
       - name: Compile Python sources
         run: |
@@ -32,12 +33,14 @@ jobs:
           python -m compileall -q sensor
           python -m compileall -q detection
           python -m compileall -q kubernetes
+          python -m compileall -q supply_chain
 
       - name: Test Tetragon event adapter
         run: |
           python -m unittest discover -s sensor/tests -v
           python -m unittest discover -s detection/tests -v
           python -m unittest discover -s kubernetes/tests -v
+          python -m unittest discover -s supply_chain/tests -v
           python -m json.tool docs/evidence/phase4-tetragon-validation.json > /dev/null
           python -m json.tool docs/evidence/phase5-soc-validation.json > /dev/null
           python -m json.tool docs/evidence/phase6-threat-detection.json > /dev/null
@@ -46,9 +49,12 @@ jobs:
           python -m json.tool docs/evidence/phase9-mcp-oauth.json > /dev/null
           python -m json.tool docs/evidence/phase10-local-llm-injection.json > /dev/null
           python -m json.tool docs/evidence/phase11-native-alerting.json > /dev/null
+          python -m json.tool docs/evidence/phase12-mcp-supply-chain.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-notifications-template.json > /dev/null
+          python -m json.tool deploy/elasticsearch/arsl-supply-chain-template.json > /dev/null
+          python -m json.tool deploy/supply-chain/trusted-mcp-tools.json > /dev/null
           python -m json.tool deploy/elastic/detection-rules/agent-runtime-rules.json > /dev/null
           python -m json.tool deploy/elastic/connectors/slack.example.json > /dev/null
           python -m json.tool deploy/elastic/connectors/teams.example.json > /dev/null
@@ -68,6 +74,10 @@ jobs:
           assert len(incident_lines) == 5
           incident_objects = [json.loads(line) for line in incident_lines]
           assert any(item.get("id") == "arsl-phase11-incident-response" for item in incident_objects)
+          supply_chain_lines = Path("deploy/kibana/arsl-supply-chain-dashboard.ndjson").read_text().splitlines()
+          assert len(supply_chain_lines) == 5
+          supply_chain_objects = [json.loads(line) for line in supply_chain_lines]
+          assert any(item.get("id") == "arsl-phase12-supply-chain" for item in supply_chain_objects)
           workloads = Path("deploy/kubernetes/phase7-workloads.yaml").read_text()
           for control in (
               "runAsNonRoot: true",
@@ -140,6 +150,22 @@ jobs:
           notification_template = json.loads(Path("deploy/elasticsearch/arsl-notifications-template.json").read_text())
           assert notification_template["template"]["mappings"]["dynamic"] == "strict"
           assert notification_template["template"]["settings"]["index.lifecycle.name"] == "arsl-ocsf-7d"
+          phase12 = json.loads(Path("docs/evidence/phase12-mcp-supply-chain.json").read_text())
+          assert phase12["result"] == "passed"
+          assert all(phase12["checks"].values())
+          assert len(phase12["attack_replay"]) == 3
+          assert all(item["decision"] == "deny" and item["executed"] is False for item in phase12["attack_replay"])
+          assert phase12["trusted_artifact"]["sbom"]["format"] == "CycloneDX JSON"
+          assert phase12["trusted_artifact"]["sbom"]["component_count"] > 0
+          assert not any(phase12["privacy"].values())
+          manifest = json.loads(Path("deploy/supply-chain/trusted-mcp-tools.json").read_text())
+          assert manifest["policy"]["require_signature"] is True
+          assert manifest["policy"]["require_sbom_attestation"] is True
+          assert manifest["policy"]["deny_unlisted_tools"] is True
+          assert len(manifest["tools"]) == manifest["policy"]["maximum_tools"] == 3
+          supply_chain_template = json.loads(Path("deploy/elasticsearch/arsl-supply-chain-template.json").read_text())
+          assert supply_chain_template["template"]["mappings"]["dynamic"] == "strict"
+          assert supply_chain_template["template"]["settings"]["index.lifecycle.name"] == "arsl-ocsf-7d"
           PY
 
       - name: Validate OPA policies

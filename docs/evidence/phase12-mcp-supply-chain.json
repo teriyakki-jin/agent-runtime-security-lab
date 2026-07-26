@@ -1,0 +1,59 @@
+{
+    "phase":  12,
+    "result":  "passed",
+    "tools":  {
+                  "cosign":  "v3.1.2",
+                  "syft":  "v1.49.0",
+                  "checksums_verified":  true
+              },
+    "trusted_artifact":  {
+                             "image":  "local-registry/arsl/mcp-server",
+                             "digest":  "sha256:cebc05525e2dd2e46fe2944fa828df08fe0d610bebe06dcf9f28444d4b6316de",
+                             "signer_public_key_sha256":  "1e28458f93c207707e389c1f6ce3377daa4cf32ae63e5ed7c695fc044fbd2354",
+                             "tool_manifest_sha256":  "7eee605c2f1d1a164a956fb0c5446b2b64117d94e9af7f44cd0c921650b58d85",
+                             "sbom":  {
+                                          "format":  "CycloneDX JSON",
+                                          "sha256":  "3d3b34d2fb92cf7d212eb1d6307d2b71484037b8b178fd63be0a458f6f103609",
+                                          "component_count":  650
+                                      },
+                             "decision":  "allow"
+                         },
+    "attack_replay":  [
+                          {
+                              "scenario":  "unsigned_image_replacement",
+                              "decision":  "deny",
+                              "reason_code":  "signature_verification_failed",
+                              "executed":  false
+                          },
+                          {
+                              "scenario":  "mutable_tag_reference",
+                              "decision":  "deny",
+                              "reason_code":  "unpinned_image_reference",
+                              "executed":  false
+                          },
+                          {
+                              "scenario":  "signed_tool_manifest_drift",
+                              "decision":  "deny",
+                              "reason_code":  "tool_manifest_digest_mismatch",
+                              "executed":  false
+                          }
+                      ],
+    "privacy":  {
+                    "private_key_exported":  false,
+                    "signing_password_exported":  false,
+                    "raw_signature_exported":  false,
+                    "sbom_package_paths_exported":  false
+                },
+    "checks":  {
+                   "release_tool_checksums_verified":  true,
+                   "trusted_signature_verified":  true,
+                   "image_digest_pinned":  true,
+                   "cyclonedx_sbom_attested":  true,
+                   "tool_manifest_bound_to_image":  true,
+                   "trusted_image_admitted":  true,
+                   "unsigned_image_blocked":  true,
+                   "mutable_tag_blocked":  true,
+                   "signed_tool_drift_blocked":  true,
+                   "malicious_container_never_started":  true
+               }
+}

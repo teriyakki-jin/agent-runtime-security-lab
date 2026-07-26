@@ -2,11 +2,15 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> Current: **Phase 11 — Elastic-Native Detection & Incident Response**
+> 현재: **Phase 12 — MCP 공급망 신뢰 게이트**
+
+![Phase 12 MCP supply-chain trust gate](docs/screenshots/phase12-mcp-supply-chain.png)
+
+> 이전: **Phase 11 — Elastic 기반 탐지 및 사고 대응**
 
 ![Phase 11 Elastic-native alerting](docs/screenshots/phase11-native-alerting.png)
 
-> Previous: **Phase 10 — Local LLM Indirect Prompt Injection Defense**
+> 이전: **Phase 10 — 로컬 LLM 간접 프롬프트 인젝션 방어**
 
 ![Phase 10 local LLM prompt injection validation](docs/screenshots/phase10-local-llm-injection.png)
 
@@ -26,8 +30,9 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
 - [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
 - [Phase 9: OAuth 2.1 MCP Authorization & Tool Scope](docs/PHASE9.md)
-- [Phase 10: Local LLM Indirect Prompt Injection Defense](docs/PHASE10.md)
-- [Phase 11: Elastic-Native Detection & Incident Response](docs/PHASE11.md)
+- [Phase 10: 로컬 LLM 간접 프롬프트 인젝션 방어](docs/PHASE10.md)
+- [Phase 11: Elastic 기반 탐지 및 사고 대응](docs/PHASE11.md)
+- [Phase 12: MCP 공급망 신뢰 게이트](docs/PHASE12.md)
 
 ## Why this project
 
@@ -87,6 +92,10 @@ flowchart LR
     DOC["Untrusted external document"] --> LLM["Local Qwen3 / llama.cpp"]
     LLM -->|"proposed tool call"| PG["Prompt provenance guard"]
     PG -->|"deny tainted action"| FINDING
+    MANIFEST["허용된 MCP 도구 매니페스트"] --> GATE["Cosign + SBOM 신뢰 게이트"]
+    REGISTRY["로컬 OCI 레지스트리"] --> GATE
+    GATE -->|"allow signed digest"| MCP
+    GATE -->|"deny tag / unsigned / drift"| FINDING
 ```
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
@@ -267,43 +276,61 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 
 실제 검증 결과는 [Phase 9 문서](docs/PHASE9.md)와 [검증 증거](docs/evidence/phase9-mcp-oauth.json)에 기록했습니다.
 
-## Try Phase 10 — local LLM prompt injection
+## Phase 10 실행 — 로컬 LLM 프롬프트 인젝션
 
-An actual local Qwen3 model processes an untrusted document containing an indirect prompt injection. The intentionally vulnerable path produces a tool-call proposal; the provenance-aware guard blocks it before execution and exports only fingerprints.
+실제 로컬 Qwen3 모델이 간접 프롬프트 인젝션이 포함된 신뢰할 수 없는 문서를 처리합니다. 의도적으로 취약하게 만든 경로는 도구 호출을 제안하지만, 출처 인식 가드가 실행 전에 이를 차단하고 fingerprint만 증거로 내보냅니다.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-llm-injection.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-llm.ps1
 ```
 
-- CPU-only `llama.cpp` runtime with `Qwen3-0.6B-GGUF:Q8_0`
-- loopback-only model API and isolated Docker network
-- Unicode NFKC normalization and weighted injection signals
-- taint propagation from untrusted source to proposed tool arguments
-- tool execution hard-disabled in the experiment harness
-- OWASP Agentic ASI01 / OWASP LLM01:2025 / MITRE ATLAS AML.T0051 mapping
-- raw prompt, model response, document, and URL excluded from evidence
+- CPU 전용 `llama.cpp` 런타임과 `Qwen3-0.6B-GGUF:Q8_0`
+- loopback 전용 모델 API와 격리된 Docker 네트워크
+- Unicode NFKC 정규화와 가중치 기반 인젝션 신호
+- 신뢰할 수 없는 출처에서 제안된 도구 인자까지 taint 전파
+- 실험 harness에서 도구 실행을 강제로 비활성화
+- OWASP Agentic ASI01 / OWASP LLM01:2025 / MITRE ATLAS AML.T0051 매핑
+- 원본 프롬프트·모델 응답·문서·URL을 증거에서 제외
 
-See the [Phase 10 report](docs/PHASE10.md) and [sanitized evidence](docs/evidence/phase10-local-llm-injection.json).
+[Phase 10 보고서](docs/PHASE10.md)와 [비식별화된 검증 증거](docs/evidence/phase10-local-llm-injection.json)를 확인할 수 있습니다.
 
-## Try Phase 11 — Elastic-native alerting
+## Phase 11 실행 — Elastic 기반 네이티브 경보
 
-Synchronize the versioned ES|QL pack into Elastic Security, replay three attack classes, deliver privacy-safe connector notifications, and verify that scheduled runs do not duplicate alerts.
+버전 관리되는 ES|QL 규칙을 Elastic Security에 동기화하고 세 가지 공격을 재현합니다. 개인정보를 제거한 connector 알림을 전송하며, 예약 실행이 동일 경보를 중복 생성하지 않는지 검증합니다.
 
 ```powershell
 docker compose --profile soc up -d --build
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alerting.ps1
 ```
 
-- three enabled Elastic Security ES|QL rules on a one-minute schedule
-- native alerts in `.alerts-security.alerts-default`
-- Basic-compatible `.index` connector with no stored secret
-- sanitized deliveries in `arsl-notifications-v1` with seven-day retention
-- stable counts across the next schedule, proving duplicate suppression
-- Slack and Teams configuration examples with their Gold-license requirement documented
-- importable Kibana Incident Response dashboard and machine-readable evidence
+- 1분 주기로 동작하는 Elastic Security ES|QL 규칙 3개
+- `.alerts-security.alerts-default`의 네이티브 경보
+- 저장된 secret이 없는 Basic 호환 `.index` connector
+- 7일 보존 정책을 적용한 `arsl-notifications-v1` 비식별 알림
+- 다음 예약 실행에서도 경보 수가 유지되는 중복 억제 검증
+- Gold 라이선스 요구사항을 명시한 Slack·Teams 설정 예시
+- 가져오기 가능한 Kibana 사고 대응 대시보드와 기계 판독형 증거
 
-Open the dashboard at <http://127.0.0.1:15601/app/dashboards#/view/arsl-phase11-incident-response>. See the [Phase 11 report](docs/PHASE11.md) and [sanitized evidence](docs/evidence/phase11-native-alerting.json).
+대시보드는 <http://127.0.0.1:15601/app/dashboards#/view/arsl-phase11-incident-response>에서 열 수 있습니다. [Phase 11 보고서](docs/PHASE11.md)와 [비식별화된 검증 증거](docs/evidence/phase11-native-alerting.json)도 제공합니다.
+
+## Phase 12 실행 — MCP 공급망 신뢰 게이트
+
+MCP 서버 이미지를 로컬 OCI 레지스트리에 게시한 뒤 Cosign 서명, digest 고정, CycloneDX SBOM attestation, 최소 권한 도구 매니페스트를 모두 검증한 경우에만 실행을 허용합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-supply-chain.ps1
+```
+
+- 공식 release checksum으로 검증한 Cosign v3.1.2와 Syft v1.49.0
+- `registry:3.1.1` 기반의 로컬 전용 OCI 레지스트리
+- 3개 MCP 도구와 OAuth scope를 canonical JSON hash로 이미지에 바인딩
+- 서명된 digest와 CycloneDX SBOM attestation을 실행 전에 확인
+- unsigned image 교체, mutable tag, 서명된 도구 매니페스트 변조를 모두 fail-closed 차단
+- 악성 테스트 이미지는 MCP 프로세스로 한 번도 실행하지 않음
+- 비밀키·서명 비밀번호·원시 서명·패키지 경로를 증거에서 제외
+
+[Phase 12 보고서](docs/PHASE12.md), [비식별화된 검증 증거](docs/evidence/phase12-mcp-supply-chain.json), [Kibana 대시보드](deploy/kibana/arsl-supply-chain-dashboard.ndjson)를 제공합니다.
 
 ## Security controls
 
@@ -330,6 +357,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-kubernetes.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alerting.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-supply-chain.ps1
 ```
 
 기본 검증은 OPA 5개, Agent API 34개, MCP 6개, OAuth 4개, sensor 8개, detection 6개, Kubernetes attack-chain 4개 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 9~11은 OAuth scope, 실제 로컬 LLM, Elastic-native alerting을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~11 정적 자산 검증을 실행합니다.
@@ -350,6 +378,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alertin
 | ES|QL detection pack | Versioned agent runtime rules and idempotent alerts |
 | Elastic Security Detection Engine | Scheduled native alerts and duplicate suppression |
 | Kibana connectors | Basic index delivery plus license-aware Slack/Teams templates |
+| Cosign 3.1.2 + Syft 1.49.0 | OCI 서명 검증과 CycloneDX SBOM attestation |
+| Distribution Registry 3.1.1 | 로컬 MCP 이미지 공급망 공격 재현 |
 | Kind + Kubernetes 1.36 | Reproducible workload identity and ServiceAccount lab |
 | Kubernetes Audit Log | RBAC privilege escalation and API-to-runtime attack chain |
 | OAuth 2.1 + RS256 JWT | MCP protected resource, PKCE and tool scopes |

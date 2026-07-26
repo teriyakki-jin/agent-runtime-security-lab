@@ -6,9 +6,9 @@ services:
     container_name: arsl-opa
     command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
     volumes:
-      - ./policy:/policies:ro
+      - ${ARSL_PROJECT_ROOT:-.}/policy:/policies:ro
     ports:
-      - "127.0.0.1:8181:8181"
+      - "${ARSL_BIND_ADDRESS:-127.0.0.1}:8181:8181"
     networks:
       - agent_net
     restart: unless-stopped
@@ -195,6 +195,20 @@ services:
       - agent_net
     restart: unless-stopped
 
+  registry:
+    image: registry:3.1.1@sha256:1be55279f18a2fe1a74edf2664cac61c1bea305b7b4642dab412e7affdcb3e33
+    container_name: arsl-registry
+    profiles: ["supply-chain"]
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    ports:
+      - "${ARSL_BIND_ADDRESS:-127.0.0.1}:${ARSL_REGISTRY_PORT:-15000}:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - agent_net
+    restart: unless-stopped
+
 networks:
   agent_net:
     driver: bridge
@@ -202,3 +216,4 @@ networks:
 volumes:
   elasticsearch-data:
   llm-model-cache:
+  registry-data:

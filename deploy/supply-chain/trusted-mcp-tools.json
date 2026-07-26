@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "server": {
+    "name": "arsl-mcp-server",
+    "transport": "streamable-http",
+    "require_digest": true
+  },
+  "policy": {
+    "deny_unlisted_tools": true,
+    "maximum_tools": 3,
+    "require_signature": true,
+    "require_sbom_attestation": true
+  },
+  "tools": [
+    {
+      "name": "mock_http_request",
+      "oauth_scope": "mcp:mock_http_request",
+      "risk": "high"
+    },
+    {
+      "name": "read_document",
+      "oauth_scope": "mcp:read_document",
+      "risk": "low"
+    },
+    {
+      "name": "run_command",
+      "oauth_scope": "mcp:run_command",
+      "risk": "critical"
+    }
+  ]
+}
