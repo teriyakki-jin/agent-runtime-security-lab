@@ -1,71 +1,22 @@
 # Agent Runtime Security Lab
 
-AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
-
-> 최종 포트폴리오 릴리스: **Phase 15 — Measured Agent Security**
-
 ![Phase 15 measured agent security](docs/screenshots/phase15-portfolio-release.png)
 
-[2분 20초 통합 공격 데모](docs/demo/phase15-integrated-attack.mp4) · [최종 보고서](docs/PHASE15.md) · [기계 판독형 검증 증거](docs/evidence/phase15-portfolio-release.json)
+AI Agent의 **허가된 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 MCP 도구 오용을 탐지·격리하고 OCSF 증거로 남기는 로컬 보안 실습 프로젝트입니다.
 
-> 이전: **Phase 14 — Causal Detection & Safe Response**
+[2분 20초 실제 실행 데모](docs/demo/phase15-integrated-attack.mp4) · [최종 보고서](docs/PHASE15.md) · [기계 판독형 검증 증거](docs/evidence/phase15-portfolio-release.json)
 
-![Phase 14 causal detection and safe response](docs/screenshots/phase14-safe-response.png)
+## 핵심 검증 결과
 
-> 이전: **Phase 13 — Keyless MCP Admission**
+| 지표 | 로컬 검증 결과 | 측정 범위 |
+|---|---:|---|
+| OPA 정책 지연시간 | p95 **21.211ms**, p99 **27.964ms** | loopback 요청 60회 |
+| Detect-to-block | **2.9초** | 격리된 Phase 14 대응 시나리오 |
+| 탐지 recall | **100%** (TP 6 / FN 0) | 고유 시나리오 6종, fixture 실행 12건 |
+| False positive rate | **0%** (FP 0 / TN 6) | 로컬 결정론적 회귀 fixture |
+| Teardown | container·network·volume·sensor **0** | 전체 Compose 종료 후 확인 |
 
-![Phase 13 keyless MCP admission](docs/screenshots/phase13-keyless-admission.png)
-
-> 이전: **Phase 12 — MCP 공급망 신뢰 게이트**
-
-![Phase 12 MCP supply-chain trust gate](docs/screenshots/phase12-mcp-supply-chain.png)
-
-> 이전: **Phase 11 — Elastic 기반 탐지 및 사고 대응**
-
-![Phase 11 Elastic-native alerting](docs/screenshots/phase11-native-alerting.png)
-
-> 이전: **Phase 10 — 로컬 LLM 간접 프롬프트 인젝션 방어**
-
-![Phase 10 local LLM prompt injection validation](docs/screenshots/phase10-local-llm-injection.png)
-
-> Previous: **Phase 9 — OAuth 2.1 MCP Authorization & Tool Scope**
-
-![Phase 9 OAuth security validation](docs/screenshots/phase9-mcp-oauth-scopes.png)
-
-![Phase 8 Kubernetes audit attack chain](docs/screenshots/phase8-audit-attack-chain.png)
-
-![Phase 7 Kubernetes workload identity correlation](docs/screenshots/phase7-kubernetes-identity.png)
-
-- [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
-- [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
-- [Phase 4: Live Tetragon eBPF Validation](docs/PHASE4.md)
-- [Phase 5: OCSF SOC Pipeline](docs/PHASE5.md)
-- [Phase 6: Detection-as-Code & Threat Mapping](docs/PHASE6.md)
-- [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
-- [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
-- [Phase 9: OAuth 2.1 MCP Authorization & Tool Scope](docs/PHASE9.md)
-- [Phase 10: 로컬 LLM 간접 프롬프트 인젝션 방어](docs/PHASE10.md)
-- [Phase 11: Elastic 기반 탐지 및 사고 대응](docs/PHASE11.md)
-- [Phase 12: MCP 공급망 신뢰 게이트](docs/PHASE12.md)
-- [Phase 13: Keyless MCP Admission](docs/PHASE13.md)
-- [Phase 14: Causal Detection & Safe Response](docs/PHASE14.md)
-- [Phase 15: Portfolio Release & Measured Security](docs/PHASE15.md)
-
-## Why this project
-
-일반적인 AI 보안 데모는 프롬프트 문자열 또는 모델 응답만 검사합니다. 이 프로젝트는 판단 지점을 MCP 도구 실행 경계와 Linux 런타임까지 확장합니다.
-
-- OPA가 도구 요청을 `allow / review / deny`로 분류
-- 위험 작업은 사람의 승인과 1회성 HMAC capability 요구
-- 실행 전 agent intent를 별도 원장에 기록
-- Tetragon 이벤트를 프로세스·파일·네트워크 observation으로 정규화
-- Docker container ID와 event timestamp로 intent를 자동 상관분석
-- intent와 observation이 다르면 Critical/High finding 생성
-- 원본 인자와 관측 대상을 OCSF 내보내기에서 fingerprint로 비식별화
-- Jaeger에서 `invoke_agent`와 `execute_tool` span 추적
-- ES|QL detection-as-code로 OCSF finding을 경보화하고 OWASP Agentic 2026 / MITRE ATT&CK에 매핑
-- Kubernetes Pod UID·Namespace·ServiceAccount를 intent와 eBPF event에 바인딩해 workload identity 도용 탐지
-- OAuth 2.1 PKCE, resource audience, JWT와 도구별 scope로 MCP transport 보호
+> 위 결과는 로컬 회귀 검증값이며 운영 환경의 일반적인 공격 탐지 정확도나 용량 성능을 의미하지 않습니다. CPU·메모리는 5개 컨테이너를 실행 전·후 각 1회 측정한 스냅샷입니다.
 
 ## Architecture
 
@@ -126,18 +77,18 @@ flowchart LR
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
 
-## Detection scenarios
+## Threat → Control → Evidence
 
-| Layer | Scenario | Policy intent | Runtime observation | Result |
-|---|---|---|---|---|
-| Policy | Public document read | `allow` | MCP execution | Allowed |
-| Policy | `../../etc/shadow` path traversal | `deny` | None | Blocked |
-| Policy | Shell tool misuse | `deny` | None | Blocked |
-| Approval | External transfer request | `review` | None until approval | Pending |
-| Runtime | Public document file access | `allow + file_access` | Expected path | Match |
-| Runtime | Process execution after deny | No runtime activity | `process_exec` | Critical mismatch |
-| Runtime | Network connection before approval | No runtime activity | `network_connect` | Critical mismatch |
-| Runtime | Observation without intent | No matching intent | Any event | High orphan finding |
+| Threat | Control | Evidence |
+|---|---|---|
+| 간접 프롬프트 인젝션이 도구 호출을 유도 | provenance-aware taint와 실행 전 guard | [Phase 10](docs/evidence/phase10-local-llm-injection.json) |
+| 탈취 OAuth token과 과도한 agent 권한 | audience·scope·delegation chain·ancestor revocation | [Phase 9](docs/evidence/phase9-mcp-oauth.json), [Phase 14](docs/evidence/phase14-safe-response.json) |
+| 서명 label을 재사용한 MCP 코드·도구 변조 | GitHub OIDC identity, Rekor, SBOM policy, signed `tools/list`, digest-only launch | [Phase 13](docs/evidence/phase13-keyless-admission.json) |
+| 정책 거부 이후 process·network 실행 | intent/runtime correlation과 Tetragon observation | [Phase 4](docs/evidence/phase4-tetragon-validation.json), [Phase 6](docs/evidence/phase6-threat-detection.json) |
+| Kubernetes workload identity와 RBAC 악용 | Pod UID·ServiceAccount binding과 audit attack chain | [Phase 7](docs/evidence/phase7-kubernetes-identity.json), [Phase 8](docs/evidence/phase8-kubernetes-audit-chain.json) |
+| 시간 근접 이벤트의 잘못된 자동 대응 | 동일 agent·resource의 명시적 parent edge | [Phase 14](docs/evidence/phase14-safe-response.json) |
+| 중복 또는 영구 격리로 인한 서비스 피해 | SHA-256 response key, TTL recovery, human override | [Phase 14](docs/evidence/phase14-safe-response.json) |
+| 로그의 token·인자·container identity 노출 | fingerprint 기반 OCSF와 집계 evidence | [Phase 15](docs/evidence/phase15-portfolio-release.json) |
 
 ## Quick start
 
@@ -152,15 +103,82 @@ Set-Location D:\develop\agent-runtime-security-lab
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-lab.ps1
 ```
 
-Services:
-
 - Security dashboard: <http://127.0.0.1:8080>
-- OpenAPI: <http://127.0.0.1:8080/docs>
 - Runtime OCSF: <http://127.0.0.1:8080/api/runtime/ocsf>
 - Jaeger: <http://127.0.0.1:16686>
 - OPA: <http://127.0.0.1:8181>
 
 MCP는 호스트 포트를 공개하지 않으며 전용 Docker bridge 안에서만 접근됩니다.
+
+<details>
+<summary><strong>Phase 2~14 기록과 이전 실행 화면 보기</strong></summary>
+
+### Phase 14 — Causal Detection & Safe Response
+
+![Phase 14 causal detection and safe response](docs/screenshots/phase14-safe-response.png)
+
+### Phase 13 — Keyless MCP Admission
+
+![Phase 13 keyless MCP admission](docs/screenshots/phase13-keyless-admission.png)
+
+### Phase 12 — MCP 공급망 신뢰 게이트
+
+![Phase 12 MCP supply-chain trust gate](docs/screenshots/phase12-mcp-supply-chain.png)
+
+### Phase 11 — Elastic 기반 탐지 및 사고 대응
+
+![Phase 11 Elastic-native alerting](docs/screenshots/phase11-native-alerting.png)
+
+### Phase 10 — 로컬 LLM 간접 프롬프트 인젝션 방어
+
+![Phase 10 local LLM prompt injection validation](docs/screenshots/phase10-local-llm-injection.png)
+
+### Phase 9~7
+
+![Phase 9 OAuth security validation](docs/screenshots/phase9-mcp-oauth-scopes.png)
+
+![Phase 8 Kubernetes audit attack chain](docs/screenshots/phase8-audit-attack-chain.png)
+
+![Phase 7 Kubernetes workload identity correlation](docs/screenshots/phase7-kubernetes-identity.png)
+
+- [Phase 2: Runtime Approval Control Plane](docs/PHASE2.md)
+- [Phase 3: Intent / Runtime Correlation](docs/PHASE3.md)
+- [Phase 4: Live Tetragon eBPF Validation](docs/PHASE4.md)
+- [Phase 5: OCSF SOC Pipeline](docs/PHASE5.md)
+- [Phase 6: Detection-as-Code & Threat Mapping](docs/PHASE6.md)
+- [Phase 7: Kubernetes Workload Identity Correlation](docs/PHASE7.md)
+- [Phase 8: Kubernetes Audit/RBAC Attack Chain](docs/PHASE8.md)
+- [Phase 9: OAuth 2.1 MCP Authorization & Tool Scope](docs/PHASE9.md)
+- [Phase 10: 로컬 LLM 간접 프롬프트 인젝션 방어](docs/PHASE10.md)
+- [Phase 11: Elastic 기반 탐지 및 사고 대응](docs/PHASE11.md)
+- [Phase 12: MCP 공급망 신뢰 게이트](docs/PHASE12.md)
+- [Phase 13: Keyless MCP Admission](docs/PHASE13.md)
+- [Phase 14: Causal Detection & Safe Response](docs/PHASE14.md)
+
+</details>
+
+## Why this project
+
+일반적인 AI 보안 데모는 프롬프트 문자열이나 모델 응답만 검사합니다. 이 프로젝트는 판단 지점을 MCP 실행 경계와 Linux 런타임까지 확장합니다.
+
+- OPA 기반 `allow / review / deny`와 1회성 human-approval capability
+- Tetragon 프로세스·파일·네트워크 observation과 intent 상관분석
+- Kubernetes workload identity 및 OAuth 2.1 audience·scope 바인딩
+- Cosign·Rekor·SBOM·signed tool manifest 기반 digest-only admission
+- OCSF·Elastic 경보, 토큰 폐기, 가역적 컨테이너·네트워크 격리
+
+## Detection scenarios
+
+| Layer | Scenario | Policy intent | Runtime observation | Result |
+|---|---|---|---|---|
+| Policy | Public document read | `allow` | MCP execution | Allowed |
+| Policy | `../../etc/shadow` path traversal | `deny` | None | Blocked |
+| Policy | Shell tool misuse | `deny` | None | Blocked |
+| Approval | External transfer request | `review` | None until approval | Pending |
+| Runtime | Public document file access | `allow + file_access` | Expected path | Match |
+| Runtime | Process execution after deny | No runtime activity | `process_exec` | Critical mismatch |
+| Runtime | Network connection before approval | No runtime activity | `network_connect` | Critical mismatch |
+| Runtime | Observation without intent | No matching intent | Any event | High orphan finding |
 
 ## Try Phase 3
 
@@ -213,7 +231,7 @@ Linux/Kubernetes에서 [`deploy/tetragon/runtime-observation.yaml`](deploy/tetra
 kubectl apply -f deploy/tetragon/runtime-observation.yaml
 
 export RUNTIME_SENSOR_HMAC_KEY='<same key as agent-api>'
-tetra getevents -o json | python sensor/tetragon_adapter.py \
+tetra getevents -o json | python -m sensor.tetragon_adapter \
   --container-alias '<docker-id>=arsl-mcp-server' \
   --container-name arsl-mcp-server \
   --gateway http://127.0.0.1:8080
@@ -405,30 +423,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase15-portfo
 ```
 
 - OPA 정책 요청 60회의 p50·p95·p99 지연시간
-- 정상 6건·공격 6건 fixture 기반 precision·recall·FPR
+- 고유 시나리오 6종을 정상 6건·공격 6건으로 반복 실행한 회귀 fixture의 precision·recall·FPR
 - 공격 탐지 p95와 실제 detect-to-block MTTR
-- container별 CPU·메모리 사용량
+- container별 실행 전·후 2회 CPU·메모리 스냅샷
 - 19개 테스트와 80% 이상 branch coverage
 - 실패 경로에서도 실행되는 완전한 container·network·volume teardown
 - 비밀정보와 container ID를 제외한 기계 판독 evidence
 - 2분 20초 통합 공격 데모와 포트폴리오 실행 화면
 
-현재 검증 결과는 정책 p95 **21.211ms**, p99 **27.964ms**, 공격 탐지 p95 **26.179ms**, detect-to-block **2.9초**, recall **100%**, FPR **0%**입니다.
+로컬 결정론적 회귀 fixture에서 정책 p95 **21.211ms**, p99 **27.964ms**, 공격 탐지 p95 **26.179ms**, detect-to-block **2.9초**, recall **100%**, FPR **0%**를 기록했습니다. 이 결과를 일반적인 공격 탐지 정확도로 해석해서는 안 됩니다.
 
 [Phase 15 보고서](docs/PHASE15.md), [진행 체크리스트](docs/PHASE15_PROGRESS.md), [검증 증거](docs/evidence/phase15-portfolio-release.json), [통합 공격 데모](docs/demo/phase15-integrated-attack.mp4)를 제공합니다.
-
-## Threat → Control → Evidence
-
-| Threat | Control | Evidence |
-|---|---|---|
-| 간접 프롬프트 인젝션이 도구 호출을 유도 | provenance-aware taint와 실행 전 guard | [Phase 10](docs/evidence/phase10-local-llm-injection.json) |
-| 탈취 OAuth token과 과도한 agent 권한 | audience·scope·delegation chain·ancestor revocation | [Phase 9](docs/evidence/phase9-mcp-oauth.json), [Phase 14](docs/evidence/phase14-safe-response.json) |
-| 서명 label을 재사용한 MCP 코드·도구 변조 | GitHub OIDC identity, Rekor, SBOM policy, signed `tools/list`, digest-only launch | [Phase 13](docs/evidence/phase13-keyless-admission.json) |
-| 정책 거부 이후 process·network 실행 | intent/runtime correlation과 Tetragon observation | [Phase 4](docs/evidence/phase4-tetragon-validation.json), [Phase 6](docs/evidence/phase6-threat-detection.json) |
-| Kubernetes workload identity와 RBAC 악용 | Pod UID·ServiceAccount binding과 audit attack chain | [Phase 7](docs/evidence/phase7-kubernetes-identity.json), [Phase 8](docs/evidence/phase8-kubernetes-audit-chain.json) |
-| 시간 근접 이벤트의 잘못된 자동 대응 | 동일 agent·resource의 명시적 parent edge | [Phase 14](docs/evidence/phase14-safe-response.json) |
-| 중복 또는 영구 격리로 인한 서비스 피해 | SHA-256 response key, TTL recovery, human override | [Phase 14](docs/evidence/phase14-safe-response.json) |
-| 로그의 token·인자·container identity 노출 | fingerprint 기반 OCSF와 집계 evidence | [Phase 15](docs/evidence/phase15-portfolio-release.json) |
 
 ## Security controls
 
@@ -541,6 +546,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase15-portfo
 - [RFC 9728 Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html)
 - [RFC 8707 Resource Indicators](https://www.rfc-editor.org/rfc/rfc8707.html)
 - [MITRE ATT&CK T1550.001](https://attack.mitre.org/techniques/T1550/001/)
+
+## License
+
+이 프로젝트는 [Apache License 2.0](LICENSE)으로 공개됩니다.
 
 ## Safety scope
 

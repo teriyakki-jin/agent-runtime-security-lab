@@ -8,12 +8,12 @@
               },
     "trusted_artifact":  {
                              "image":  "local-registry/arsl/mcp-server",
-                             "digest":  "sha256:baa11174c11c939e69e88d09402bd510125661e793de31c0289d362e00a96a77",
-                             "signer_public_key_sha256":  "20e9664291fc24ad15795653d5ac0b78899482527d1cdbf1a37ef844757d3581",
+                             "digest":  "sha256:a46db77f978a42cf7cb1f9a341c3e8417ea6a8dcd12cf05fc1d9a3d6ac6f7397",
+                             "signer_public_key_sha256":  "684bd8677736e504eb5a1c5399769e54049a1b8f9b83c333cccb23791b152989",
                              "tool_manifest_sha256":  "d80f647ce0eccd84217e3baa876a688965339db0cf46f8ea402d3915a2704990",
                              "sbom":  {
                                           "format":  "CycloneDX JSON",
-                                          "sha256":  "2bc4ab4e1dc5a7201672937f874add870585441cc6b97a7f43069f79c0f8c289",
+                                          "sha256":  "1759894bf22624bc2525b8c6dc6ac8ba3b3419ae312353145438e37aa6c35c7f",
                                           "component_count":  636
                                       },
                              "decision":  "allow"

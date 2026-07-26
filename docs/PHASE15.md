@@ -20,9 +20,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase15-portfo
 이 명령은 다음 순서로 동작한다.
 
 1. 기본 정책·OAuth·MCP·OCSF·runtime correlation 회귀 검증
-2. 정상 6건과 공격 6건 fixture 실행
+2. 고유 시나리오 6종을 정상 6건과 공격 6건, 총 12회 fixture로 실행
 3. OPA 정책 지연시간 60회 측정
-4. Docker CPU·메모리 측정
+4. Docker container별 실행 전·후 2회 CPU·메모리 스냅샷 측정
 5. 실제 delegated token 폐기와 MCP network/container 격리·복구
 6. Phase 15 테스트와 branch coverage 검증
 7. 모든 Compose 컨테이너·네트워크·볼륨 제거
@@ -49,18 +49,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-phase15.ps1 -
 | peak container memory | 64.06 MiB | ≤ 1,024 MiB | PASS |
 | Phase 15 branch coverage | 81.33% | ≥ 80% | PASS |
 
-호스트 부하에 따라 latency와 resource 수치는 달라질 수 있다. SLO와 계산 방식은 [`portfolio_release/metrics.py`](../portfolio_release/metrics.py)에 있고, 원시 샘플은 Git에서 제외된 `runtime/phase15-raw.json`에 기록된다. 정적 evidence는 비밀정보나 container ID 없이 집계값만 포함한다.
+호스트 부하에 따라 latency와 resource 수치는 달라질 수 있다. 특히 CPU·메모리는 5개 컨테이너의 실행 전·후 각 1회, container당 2회 스냅샷이므로 지속 부하 시험으로 해석하지 않는다. SLO와 계산 방식은 [`portfolio_release/metrics.py`](../portfolio_release/metrics.py)에 있고, 원시 샘플은 Git에서 제외된 `runtime/phase15-raw.json`에 기록된다. 정적 evidence는 비밀정보나 container ID 없이 집계값만 포함한다.
 
 ## 정상/공격 fixture
 
-[`scenarios.json`](../portfolio_release/fixtures/phase15/scenarios.json)은 정상 6건과 공격 6건을 동일한 방식으로 실행한다.
+[`scenarios.json`](../portfolio_release/fixtures/phase15/scenarios.json)은 고유 시나리오 6종을 정상 6건과 공격 6건, 총 12회로 반복 실행한다.
 
 - 정상: 허용된 문서 읽기, intent와 일치하는 runtime file access
 - 공격: indirect prompt injection, shell tool misuse, deny 이후 process 실행, 승인 전 network activity
 - 판정: TP 6, FP 0, TN 6, FN 0
-- 결과: precision 100%, recall 100%, FPR 0%
+- 결과: 로컬 결정론적 회귀 fixture에서 precision 100%, recall 100%, FPR 0%
 
-fixture는 외부 시스템을 공격하지 않는다. shell과 network 공격은 격리된 lab의 정책 거부 또는 시뮬레이션 경로에서만 재현한다.
+fixture는 외부 시스템을 공격하지 않는다. shell과 network 공격은 격리된 lab의 정책 거부 또는 시뮬레이션 경로에서만 재현한다. 이 수치는 일반적인 공격 탐지 정확도나 운영 환경 성능을 의미하지 않는다.
 
 ## 데모
 
