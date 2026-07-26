@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARSL Phase 13 — Keyless MCP Admission</title>
+  <style>
+    :root { color-scheme: dark; --bg:#07111f; --panel:#0d1b2d; --line:#20344d; --text:#eef5ff; --muted:#8fa7c2; --cyan:#3ddbd9; --green:#55e6a5; --amber:#f7c66b; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:radial-gradient(circle at 80% 0,#11375a 0,transparent 35%),var(--bg); color:var(--text); font:15px/1.45 Inter,Segoe UI,sans-serif; }
+    main { width:1440px; min-height:900px; padding:46px 56px; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; }
+    .eyebrow { color:var(--cyan); letter-spacing:.16em; font-size:12px; font-weight:800; }
+    h1 { margin:8px 0 4px; font-size:38px; letter-spacing:-.03em; }
+    .subtitle { color:var(--muted); font-size:17px; }
+    .status { padding:10px 16px; border:1px solid #286d5a; border-radius:999px; color:var(--green); background:#0b2b28; font-weight:800; }
+    .pipeline { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:22px; }
+    .stage { position:relative; min-height:112px; padding:17px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(145deg,#10243a,#0b1727); }
+    .stage:not(:last-child)::after { content:"→"; position:absolute; right:-14px; top:39px; z-index:2; color:var(--cyan); font-size:20px; }
+    .num { color:var(--cyan); font-size:11px; font-weight:900; }
+    .stage b { display:block; margin:8px 0 5px; font-size:15px; }
+    .stage small { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:1.08fr .92fr; gap:20px; }
+    .panel { border:1px solid var(--line); border-radius:16px; background:rgba(13,27,45,.94); padding:22px; }
+    h2 { margin:0 0 17px; font-size:18px; }
+    table { width:100%; border-collapse:collapse; }
+    th { color:var(--muted); text-align:left; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    td,th { padding:10px 9px; border-bottom:1px solid #172a41; }
+    td:last-child { color:var(--green); font-weight:700; }
+    .metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .metric { padding:16px; border-radius:12px; background:#091625; border:1px solid #1b3049; }
+    .metric strong { display:block; color:var(--green); font-size:29px; letter-spacing:-.03em; }
+    .metric span { color:var(--muted); font-size:12px; }
+    .digest { margin-top:14px; padding:13px 15px; border-radius:10px; background:#07101d; color:#a9bfd8; font:12px/1.5 Consolas,monospace; word-break:break-all; }
+    .footer { display:flex; justify-content:space-between; margin-top:20px; color:var(--muted); font-size:12px; }
+    .checks { color:var(--green); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><div class="eyebrow">AGENT RUNTIME SECURITY LAB · PHASE 13</div><h1>Keyless MCP Admission</h1><div class="subtitle">검증된 공급망 증거와 실제 MCP surface가 일치하는 digest만 실행</div></div>
+    <div class="status">● LOCAL E2E PASSED</div>
+  </header>
+  <section class="pipeline">
+    <div class="stage"><span class="num">01</span><b>Immutable Build</b><small>Base digest<br>Python hash lock</small></div>
+    <div class="stage"><span class="num">02</span><b>GitHub OIDC</b><small>Repository<br>Workflow · Ref</small></div>
+    <div class="stage"><span class="num">03</span><b>Rekor Proof</b><small>Transparency log<br>Fail closed</small></div>
+    <div class="stage"><span class="num">04</span><b>Signed Manifest</b><small>Tool names<br>Input schemas</small></div>
+    <div class="stage"><span class="num">05</span><b>Actual tools/list</b><small>Network none<br>Read only</small></div>
+    <div class="stage"><span class="num">06</span><b>Digest-only Run</b><small>Gate output only<br>Hardened runtime</small></div>
+  </section>
+  <section class="grid">
+    <div class="panel">
+      <h2>Threat → Control → Evidence</h2>
+      <table>
+        <thead><tr><th>Threat</th><th>Control</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td>정상 label 재사용</td><td>Signed manifest + tools/list</td><td>3 / 3 MATCH</td></tr>
+          <tr><td>OIDC identity 위조</td><td>Repository · workflow · ref</td><td>EXACT</td></tr>
+          <tr><td>Transparency log 우회</td><td>Rekor inclusion required</td><td>ENFORCED</td></tr>
+          <tr><td>취약 Python package</td><td>Critical / High zero policy</td><td>0 / 0</td></tr>
+          <tr><td>Mutable tag 실행</td><td>Gate-emitted digest only</td><td>BLOCKED</td></tr>
+          <tr><td>Runtime 권한 확대</td><td>RO · cap drop · network none</td><td>HARDENED</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Validation evidence</h2>
+      <div class="metrics">
+        <div class="metric"><strong>26 / 26</strong><span>Supply-chain tests</span></div>
+        <div class="metric"><strong>82%</strong><span>Module coverage</span></div>
+        <div class="metric"><strong>3 / 3</strong><span>Actual MCP tools matched</span></div>
+        <div class="metric"><strong>0 / 0</strong><span>App Critical / High</span></div>
+        <div class="metric"><strong>0</strong><span>Denied licenses</span></div>
+        <div class="metric"><strong>636</strong><span>CycloneDX components</span></div>
+      </div>
+      <div class="digest">admitted_image<br>local-registry/arsl/mcp-server@sha256:baa11174c11c939e69e88d09402bd510125661e793de31c0289d362e00a96a77</div>
+    </div>
+  </section>
+  <div class="footer"><span>Cosign 3.1.2 · Syft 1.49.0 · Grype 0.116.0 · MCP 1.28.1</span><span class="checks">SIGNED MANIFEST ✓ &nbsp; SBOM POLICY ✓ &nbsp; EXACT DIGEST ✓</span></div>
+</main>
+</body>
+</html>

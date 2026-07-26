@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "server": {
     "name": "arsl-mcp-server",
     "transport": "streamable-http",
@@ -9,23 +9,28 @@
     "deny_unlisted_tools": true,
     "maximum_tools": 3,
     "require_signature": true,
-    "require_sbom_attestation": true
+    "require_sbom_attestation": true,
+    "require_tool_manifest_attestation": true,
+    "require_runtime_inventory": true
   },
   "tools": [
     {
       "name": "mock_http_request",
       "oauth_scope": "mcp:mock_http_request",
-      "risk": "high"
+      "risk": "high",
+      "input_schema_sha256": "b6f53f7888b20f24c97863f46e3333aa17bb1d7e2ff947c09948e3b17af6a35d"
     },
     {
       "name": "read_document",
       "oauth_scope": "mcp:read_document",
-      "risk": "low"
+      "risk": "low",
+      "input_schema_sha256": "4f39c74dd79633fed6c6556256963ad117edf1de3c8aa8a9540ee75498dd4bfa"
     },
     {
       "name": "run_command",
       "oauth_scope": "mcp:run_command",
-      "risk": "critical"
+      "risk": "critical",
+      "input_schema_sha256": "283fa0b855ad452e1ffc8c94502caed3f8359429db159b1669194bbe82311750"
     }
   ]
 }

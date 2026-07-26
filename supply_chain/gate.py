@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import re
@@ -11,6 +12,9 @@ from typing import Any, Sequence
 
 
 TOOL_MANIFEST_LABEL = "org.opencontainers.image.arsl.tool-manifest-sha256"
+TOOL_MANIFEST_PREDICATE = (
+    "https://agent-runtime-security.dev/attestations/mcp-tool-manifest/v1"
+)
 DIGEST_PATTERN = re.compile(r"^(?P<repository>.+)@(?P<digest>sha256:[a-f0-9]{64})$")
 TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
@@ -28,7 +32,8 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 
 def validate_manifest(payload: dict[str, Any]) -> None:
-    if payload.get("schema_version") != 1:
+    schema_version = payload.get("schema_version")
+    if schema_version not in (1, 2):
         raise VerificationError("unsupported_manifest_schema")
     server = payload.get("server")
     policy = payload.get("policy")
@@ -51,6 +56,12 @@ def validate_manifest(payload: dict[str, Any]) -> None:
         if scope != f"mcp:{name}":
             raise VerificationError("invalid_tool_scope_binding")
         names.append(name)
+        if schema_version == 2:
+            schema_hash = tool.get("input_schema_sha256")
+            if not isinstance(schema_hash, str) or not re.fullmatch(
+                r"[a-f0-9]{64}", schema_hash
+            ):
+                raise VerificationError("invalid_tool_schema_hash")
     if names != sorted(names) or len(names) != len(set(names)):
         raise VerificationError("noncanonical_tool_inventory")
     for requirement in (
@@ -60,6 +71,13 @@ def validate_manifest(payload: dict[str, Any]) -> None:
     ):
         if policy.get(requirement) is not True:
             raise VerificationError("weakened_manifest_policy")
+    if schema_version == 2:
+        for requirement in (
+            "require_tool_manifest_attestation",
+            "require_runtime_inventory",
+        ):
+            if policy.get(requirement) is not True:
+                raise VerificationError("weakened_manifest_policy")
 
 
 def canonical_manifest_sha256(payload: dict[str, Any]) -> str:
@@ -125,27 +143,63 @@ def inspect_manifest_label(payload: Any) -> tuple[str, list[str]]:
     return label, repo_digests
 
 
+def attestation_predicates(raw: str, predicate_type: str) -> list[dict[str, Any]]:
+    payload = _json_output(raw, "invalid_attestation_payload")
+    entries = payload if isinstance(payload, list) else [payload]
+    predicates: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("payload"), str):
+            continue
+        try:
+            statement = json.loads(base64.b64decode(entry["payload"], validate=True))
+        except (ValueError, json.JSONDecodeError):
+            continue
+        if (
+            isinstance(statement, dict)
+            and statement.get("predicateType") == predicate_type
+            and isinstance(statement.get("predicate"), dict)
+        ):
+            predicates.append(statement["predicate"])
+    return predicates
+
+
 def verify_supply_chain(
     *,
     image: str,
     manifest: dict[str, Any],
-    public_key: Path,
+    public_key: Path | None,
     cosign: str,
     docker: str,
     allow_insecure_registry: bool,
     offline_verification: bool = False,
+    certificate_identity: str | None = None,
+    certificate_oidc_issuer: str | None = None,
 ) -> dict[str, Any]:
     repository, digest = pinned_image(image)
     expected_manifest = canonical_manifest_sha256(manifest)
     insecure = ["--allow-insecure-registry"] if allow_insecure_registry else []
     offline_log = ["--insecure-ignore-tlog"] if offline_verification else []
+    if public_key is not None:
+        if certificate_identity or certificate_oidc_issuer:
+            raise VerificationError("ambiguous_signature_identity")
+        trust = ["--key", str(public_key)]
+        identity_verified = False
+    elif certificate_identity and certificate_oidc_issuer:
+        if offline_verification:
+            raise VerificationError("keyless_verification_requires_rekor")
+        trust = [
+            f"--certificate-identity={certificate_identity}",
+            f"--certificate-oidc-issuer={certificate_oidc_issuer}",
+        ]
+        identity_verified = True
+    else:
+        raise VerificationError("signature_identity_required")
 
     signature_raw = _run(
         [
             cosign,
             "verify",
-            "--key",
-            str(public_key),
+            *trust,
             *insecure,
             *offline_log,
             "--output",
@@ -162,8 +216,7 @@ def verify_supply_chain(
         [
             cosign,
             "verify-attestation",
-            "--key",
-            str(public_key),
+            *trust,
             "--type",
             "cyclonedx",
             *insecure,
@@ -174,6 +227,38 @@ def verify_supply_chain(
         ],
         "sbom_attestation_verification_failed",
     )
+
+    signed_manifest_verified = False
+    if manifest.get("schema_version") == 2:
+        manifest_raw = _run(
+            [
+                cosign,
+                "verify-attestation",
+                *trust,
+                "--type",
+                TOOL_MANIFEST_PREDICATE,
+                *insecure,
+                *offline_log,
+                "--output",
+                "json",
+                image,
+            ],
+            "tool_manifest_attestation_verification_failed",
+        )
+        predicates = attestation_predicates(manifest_raw, TOOL_MANIFEST_PREDICATE)
+        matching_predicate = False
+        for predicate in predicates:
+            try:
+                matching_predicate = (
+                    canonical_manifest_sha256(predicate) == expected_manifest
+                )
+            except VerificationError:
+                matching_predicate = False
+            if matching_predicate:
+                break
+        if not matching_predicate:
+            raise VerificationError("signed_tool_manifest_mismatch")
+        signed_manifest_verified = True
 
     inspect_raw = _run(
         [docker, "image", "inspect", image],
@@ -196,6 +281,21 @@ def verify_supply_chain(
             "digest_pinned": True,
             "sbom_attestation_verified": True,
             "tool_manifest_verified": True,
+            **(
+                {
+                    "signed_tool_manifest_verified": signed_manifest_verified,
+                    **(
+                        {
+                            "github_oidc_identity_verified": True,
+                            "rekor_inclusion_verified": True,
+                        }
+                        if identity_verified
+                        else {}
+                    ),
+                }
+                if manifest.get("schema_version") == 2
+                else {}
+            ),
         },
         "tool_count": len(manifest["tools"]),
     }
@@ -210,9 +310,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=root / "deploy/supply-chain/trusted-mcp-tools.json",
     )
-    parser.add_argument("--public-key", type=Path, required=True)
+    parser.add_argument("--public-key", type=Path)
+    parser.add_argument("--certificate-identity")
+    parser.add_argument("--certificate-oidc-issuer")
     parser.add_argument("--cosign", default="cosign")
     parser.add_argument("--docker", default="docker")
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--allow-insecure-registry", action="store_true")
     parser.add_argument(
         "--offline-verification",
@@ -233,12 +336,20 @@ def main() -> int:
             docker=args.docker,
             allow_insecure_registry=args.allow_insecure_registry,
             offline_verification=args.offline_verification,
+            certificate_identity=args.certificate_identity,
+            certificate_oidc_issuer=args.certificate_oidc_issuer,
         )
     except (OSError, ValueError, VerificationError, json.JSONDecodeError) as exc:
         code = exc.code if isinstance(exc, VerificationError) else "verification_failed"
-        print(json.dumps({"result": "blocked", "reason_code": code}))
+        payload = json.dumps({"result": "blocked", "reason_code": code})
+        if args.output:
+            args.output.write_text(payload, encoding="utf-8")
+        print(payload)
         return 2
-    print(json.dumps(result, indent=2))
+    payload = json.dumps(result, indent=2)
+    if args.output:
+        args.output.write_text(payload, encoding="utf-8")
+    print(payload)
     return 0
 
 

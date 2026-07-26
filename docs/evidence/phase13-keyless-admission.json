@@ -1,0 +1,64 @@
+{
+  "phase": 13,
+  "result": "local_passed_ci_pending",
+  "image": {
+    "repository": "local-registry/arsl/mcp-server",
+    "digest": "sha256:baa11174c11c939e69e88d09402bd510125661e793de31c0289d362e00a96a77"
+  },
+  "inventory": {
+    "expected": 3,
+    "actual": 3,
+    "matched": true
+  },
+  "sbom_policy": {
+    "application_critical": 0,
+    "application_high": 0,
+    "observed_critical": 10,
+    "observed_high": 49,
+    "component_count": 636,
+    "denied_licenses": [],
+    "missing_components": []
+  },
+  "local": {
+    "signing_mode": "ephemeral-key",
+    "rekor": "not-applicable-offline-lab",
+    "signed_tool_manifest_verified": true,
+    "exact_digest_launched": true,
+    "runtime_read_only": true,
+    "runtime_network": "none"
+  },
+  "github_keyless": {
+    "workflow": ".github/workflows/supply-chain.yml",
+    "status": "pending",
+    "identity_scope": "repository/workflow/ref",
+    "rekor_required": true
+  },
+  "tests": {
+    "passed": 26,
+    "failed": 0,
+    "coverage_percent": 82
+  },
+  "tools": {
+    "cosign": "v3.1.2",
+    "syft": "v1.49.0",
+    "grype": "v0.116.0",
+    "grype_sha256": "e5301bca123e7bb545a551cb6cc91a66b8400f65d6897005eca9f40fc16ce107"
+  },
+  "privacy": {
+    "private_key_exported": false,
+    "oidc_token_exported": false,
+    "raw_signature_exported": false,
+    "raw_sbom_exported": false,
+    "raw_vulnerability_report_exported": false
+  },
+  "checks": {
+    "signed_tool_manifest_verified": true,
+    "actual_mcp_inventory_matched": true,
+    "application_critical_zero": true,
+    "application_high_zero": true,
+    "required_components_present": true,
+    "denied_licenses_absent": true,
+    "exact_digest_launched": true,
+    "hardened_runtime_started": true
+  }
+}

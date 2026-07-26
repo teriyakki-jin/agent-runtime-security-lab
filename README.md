@@ -2,7 +2,11 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> 현재: **Phase 12 — MCP 공급망 신뢰 게이트**
+> 현재: **Phase 13 — Keyless MCP Admission**
+
+![Phase 13 keyless MCP admission](docs/screenshots/phase13-keyless-admission.png)
+
+> 이전: **Phase 12 — MCP 공급망 신뢰 게이트**
 
 ![Phase 12 MCP supply-chain trust gate](docs/screenshots/phase12-mcp-supply-chain.png)
 
@@ -33,6 +37,7 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 10: 로컬 LLM 간접 프롬프트 인젝션 방어](docs/PHASE10.md)
 - [Phase 11: Elastic 기반 탐지 및 사고 대응](docs/PHASE11.md)
 - [Phase 12: MCP 공급망 신뢰 게이트](docs/PHASE12.md)
+- [Phase 13: Keyless MCP Admission](docs/PHASE13.md)
 
 ## Why this project
 
@@ -332,6 +337,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-supply-chain.p
 
 [Phase 12 보고서](docs/PHASE12.md), [비식별화된 검증 증거](docs/evidence/phase12-mcp-supply-chain.json), [Kibana 대시보드](deploy/kibana/arsl-supply-chain-dashboard.ndjson)를 제공합니다.
 
+## Phase 13 실행 — Keyless MCP Admission
+
+Phase 13은 이미지 label만 신뢰하던 Phase 12를 실제 실행 강제 게이트로 확장합니다. GitHub Actions OIDC 인증서의 repository·workflow·ref identity와 Rekor inclusion proof를 검증하고, 격리된 컨테이너에서 실제 MCP `tools/list`를 질의한 뒤 서명된 도구 이름·입력 스키마와 일치하는 digest만 실행합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admission.ps1
+```
+
+- GitHub Actions를 commit SHA로 고정하고 `persist-credentials: false` 적용
+- Docker base image를 digest로 고정하고 Python 전체 의존성을 hash lock
+- Cosign keyless 이미지 서명, CycloneDX 및 도구 manifest attestation
+- GitHub OIDC의 정확한 workflow identity와 issuer 검증
+- Rekor transparency log inclusion을 생략 없이 검증
+- `--network=none`, read-only, capability drop 환경에서 실제 MCP `tools/list` 비교
+- Python 패키지 Critical/High 0건, 금지 라이선스·필수 컴포넌트 정책 강제
+- gate가 출력한 `repository@sha256` 외에는 실제 MCP 프로세스 실행 불가
+
+[Phase 13 보고서](docs/PHASE13.md), [진행 체크리스트](docs/PHASE13_PROGRESS.md), [비식별화된 검증 증거](docs/evidence/phase13-keyless-admission.json)를 제공합니다.
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -358,9 +382,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-audit-chain.ps
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-oauth.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alerting.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-supply-chain.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admission.ps1
 ```
 
-기본 검증은 OPA 5개, Agent API 34개, MCP 6개, OAuth 4개, sensor 8개, detection 6개, Kubernetes attack-chain 4개 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 9~11은 OAuth scope, 실제 로컬 LLM, Elastic-native alerting을 검증합니다. GitHub Actions에서는 결정론적 통합 검증과 Phase 5~11 정적 자산 검증을 실행합니다.
+기본 검증은 OPA, Agent API, MCP, OAuth, sensor, detection, Kubernetes attack-chain 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 13 공급망 모듈은 26개 테스트와 82% 커버리지를 통과하며, GitHub Actions에서는 keyless 서명·Rekor·실제 MCP admission까지 별도 검증합니다.
 
 ## Tech stack
 

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "maximum_vulnerabilities": {
+    "critical": 0,
+    "high": 0
+  },
+  "maximum_observed_vulnerabilities": {
+    "critical": 10,
+    "high": 49
+  },
+  "vulnerability_package_types": [
+    "python"
+  ],
+  "denied_licenses": [
+    "AGPL-3.0-only",
+    "GPL-3.0-only",
+    "SSPL-1.0"
+  ],
+  "license_purl_types": [
+    "pypi"
+  ],
+  "required_components": [
+    "mcp",
+    "pyjwt",
+    "opentelemetry-sdk"
+  ]
+}

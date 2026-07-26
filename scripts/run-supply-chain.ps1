@@ -11,6 +11,7 @@ Set-Location $LabRoot
 $RuntimeRoot = Join-Path $LabRoot 'runtime\phase12'
 $ToolsRoot = Join-Path $RuntimeRoot 'tools'
 $ManifestPath = Join-Path $LabRoot 'deploy\supply-chain\trusted-mcp-tools.json'
+$ToolManifestType = 'https://agent-runtime-security.dev/attestations/mcp-tool-manifest/v1'
 $CosignVersion = '3.1.2'
 $SyftVersion = '1.49.0'
 $CosignAsset = 'cosign-windows-amd64.exe'
@@ -159,6 +160,8 @@ $NativeExit = Invoke-QuietNative { & $Cosign sign --yes --key "$KeyPrefix.key" -
 if ($NativeExit) { throw 'Trusted image signing failed.' }
 $NativeExit = Invoke-QuietNative { & $Cosign attest --yes --key "$KeyPrefix.key" --signing-config $SigningConfig --type cyclonedx --predicate $SbomPath --allow-insecure-registry $TrustedPinned }
 if ($NativeExit) { throw 'SBOM attestation failed.' }
+$NativeExit = Invoke-QuietNative { & $Cosign attest --yes --key "$KeyPrefix.key" --signing-config $SigningConfig --type $ToolManifestType --predicate $ManifestPath --allow-insecure-registry $TrustedPinned }
+if ($NativeExit) { throw 'Tool-manifest attestation failed.' }
 $PublicKeyFingerprint = (Get-FileHash -Algorithm SHA256 -LiteralPath "$KeyPrefix.pub").Hash.ToLowerInvariant()
 
 Write-Host '[6/9] Allowing only the signed digest through the gate and OPA'
@@ -198,6 +201,8 @@ $NativeExit = Invoke-QuietNative { & $Cosign sign --yes --key "$KeyPrefix.key" -
 if ($NativeExit) { throw 'Tampered test-image signing failed.' }
 $NativeExit = Invoke-QuietNative { & $Cosign attest --yes --key "$KeyPrefix.key" --signing-config $SigningConfig --type cyclonedx --predicate $TamperedSbomPath --allow-insecure-registry $TamperedPinned }
 if ($NativeExit) { throw 'Tampered test-image attestation failed.' }
+$NativeExit = Invoke-QuietNative { & $Cosign attest --yes --key "$KeyPrefix.key" --signing-config $SigningConfig --type $ToolManifestType --predicate $ManifestPath --allow-insecure-registry $TamperedPinned }
+if ($NativeExit) { throw 'Tampered test-image tool-manifest attestation failed.' }
 $DriftGate = Invoke-Gate $TamperedPinned
 if ($DriftGate.exit_code -ne 2 -or $DriftGate.payload.reason_code -ne 'tool_manifest_digest_mismatch') {
     throw 'Signed tool-manifest drift was not blocked.'

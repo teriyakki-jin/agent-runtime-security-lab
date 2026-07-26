@@ -13,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Validate Docker Compose
         run: |
@@ -50,11 +52,13 @@ jobs:
           python -m json.tool docs/evidence/phase10-local-llm-injection.json > /dev/null
           python -m json.tool docs/evidence/phase11-native-alerting.json > /dev/null
           python -m json.tool docs/evidence/phase12-mcp-supply-chain.json > /dev/null
+          python -m json.tool docs/evidence/phase13-keyless-admission.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-notifications-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-supply-chain-template.json > /dev/null
           python -m json.tool deploy/supply-chain/trusted-mcp-tools.json > /dev/null
+          python -m json.tool deploy/supply-chain/sbom-policy.json > /dev/null
           python -m json.tool deploy/elastic/detection-rules/agent-runtime-rules.json > /dev/null
           python -m json.tool deploy/elastic/connectors/slack.example.json > /dev/null
           python -m json.tool deploy/elastic/connectors/teams.example.json > /dev/null
@@ -158,11 +162,31 @@ jobs:
           assert phase12["trusted_artifact"]["sbom"]["format"] == "CycloneDX JSON"
           assert phase12["trusted_artifact"]["sbom"]["component_count"] > 0
           assert not any(phase12["privacy"].values())
+          phase13 = json.loads(Path("docs/evidence/phase13-keyless-admission.json").read_text())
+          assert phase13["result"] in {"local_passed_ci_pending", "passed"}
+          assert phase13["inventory"]["matched"] is True
+          assert phase13["sbom_policy"]["application_critical"] == 0
+          assert phase13["sbom_policy"]["application_high"] == 0
+          assert phase13["local"]["exact_digest_launched"] is True
+          assert phase13["github_keyless"]["rekor_required"] is True
+          assert not any(phase13["privacy"].values())
           manifest = json.loads(Path("deploy/supply-chain/trusted-mcp-tools.json").read_text())
+          assert manifest["schema_version"] == 2
           assert manifest["policy"]["require_signature"] is True
           assert manifest["policy"]["require_sbom_attestation"] is True
+          assert manifest["policy"]["require_tool_manifest_attestation"] is True
+          assert manifest["policy"]["require_runtime_inventory"] is True
           assert manifest["policy"]["deny_unlisted_tools"] is True
           assert len(manifest["tools"]) == manifest["policy"]["maximum_tools"] == 3
+          assert all(len(tool["input_schema_sha256"]) == 64 for tool in manifest["tools"])
+          sbom_policy = json.loads(Path("deploy/supply-chain/sbom-policy.json").read_text())
+          assert sbom_policy["maximum_vulnerabilities"] == {"critical": 0, "high": 0}
+          assert set(sbom_policy["required_components"]) == {"mcp", "pyjwt", "opentelemetry-sdk"}
+          workflow = Path(".github/workflows/supply-chain.yml").read_text()
+          assert "id-token: write" in workflow
+          assert "--certificate-identity=" in workflow
+          assert "--certificate-oidc-issuer=" in workflow
+          assert "--insecure-ignore-tlog" not in workflow
           supply_chain_template = json.loads(Path("deploy/elasticsearch/arsl-supply-chain-template.json").read_text())
           assert supply_chain_template["template"]["mappings"]["dynamic"] == "strict"
           assert supply_chain_template["template"]["settings"]["index.lifecycle.name"] == "arsl-ocsf-7d"

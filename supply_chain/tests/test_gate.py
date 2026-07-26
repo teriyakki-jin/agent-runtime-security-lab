@@ -1,9 +1,11 @@
+import base64
 import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from supply_chain.gate import (
+    TOOL_MANIFEST_PREDICATE,
     VerificationError,
     canonical_manifest_sha256,
     cosign_claims_match,
@@ -16,6 +18,16 @@ from supply_chain.gate import (
 
 ROOT = Path(__file__).parents[2]
 MANIFEST_PATH = ROOT / "deploy/supply-chain/trusted-mcp-tools.json"
+
+
+def manifest_attestation(payload: dict) -> str:
+    statement = {
+        "_type": "https://in-toto.io/Statement/v0.1",
+        "predicateType": TOOL_MANIFEST_PREDICATE,
+        "predicate": payload,
+    }
+    encoded = base64.b64encode(json.dumps(statement).encode()).decode()
+    return json.dumps([{"payload": encoded}])
 
 
 class SupplyChainGateTests(unittest.TestCase):
@@ -75,6 +87,7 @@ class SupplyChainGateTests(unittest.TestCase):
                 ]
             ),
             "{}",
+            manifest_attestation(self.manifest),
             json.dumps(
                 [
                     {
@@ -108,6 +121,7 @@ class SupplyChainGateTests(unittest.TestCase):
         run.side_effect = [
             json.dumps([{"critical": {"image": {"docker-manifest-digest": self.digest}}}]),
             "{}",
+            manifest_attestation(self.manifest),
             json.dumps([{
                 "Config": {"Labels": {"org.opencontainers.image.arsl.tool-manifest-sha256": manifest_hash}},
                 "RepoDigests": [f"repo@{self.digest}"],
@@ -137,6 +151,7 @@ class SupplyChainGateTests(unittest.TestCase):
                 ]
             ),
             "{}",
+            manifest_attestation(self.manifest),
             json.dumps(
                 [
                     {

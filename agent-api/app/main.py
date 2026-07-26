@@ -184,7 +184,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Agent Runtime Security Lab",
-    version="0.12.0",
+    version="0.13.0",
     description=(
         "Policy-enforced MCP gateway with eBPF, Kubernetes identity, and "
         "audit/RBAC correlation and OAuth-scoped MCP access."
