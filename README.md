@@ -2,7 +2,17 @@
 
 AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 도구 오용을 탐지하는 로컬 보안 실습 프로젝트입니다.
 
-> 현재: **Phase 13 — Keyless MCP Admission**
+> 최종 포트폴리오 릴리스: **Phase 15 — Measured Agent Security**
+
+![Phase 15 measured agent security](docs/screenshots/phase15-portfolio-release.png)
+
+[2분 20초 통합 공격 데모](docs/demo/phase15-integrated-attack.mp4) · [최종 보고서](docs/PHASE15.md) · [기계 판독형 검증 증거](docs/evidence/phase15-portfolio-release.json)
+
+> 이전: **Phase 14 — Causal Detection & Safe Response**
+
+![Phase 14 causal detection and safe response](docs/screenshots/phase14-safe-response.png)
+
+> 이전: **Phase 13 — Keyless MCP Admission**
 
 ![Phase 13 keyless MCP admission](docs/screenshots/phase13-keyless-admission.png)
 
@@ -38,6 +48,8 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 - [Phase 11: Elastic 기반 탐지 및 사고 대응](docs/PHASE11.md)
 - [Phase 12: MCP 공급망 신뢰 게이트](docs/PHASE12.md)
 - [Phase 13: Keyless MCP Admission](docs/PHASE13.md)
+- [Phase 14: Causal Detection & Safe Response](docs/PHASE14.md)
+- [Phase 15: Portfolio Release & Measured Security](docs/PHASE15.md)
 
 ## Why this project
 
@@ -384,6 +396,40 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase14-respon
 
 [Phase 14 보고서](docs/PHASE14.md), [진행 체크리스트](docs/PHASE14_PROGRESS.md), [비식별화된 검증 증거](docs/evidence/phase14-safe-response.json), [실행 화면](docs/screenshots/phase14-safe-response.png)을 제공합니다.
 
+## Phase 15 실행 — 최종 포트폴리오 릴리스
+
+Phase 15는 Phase 1~14의 실행 전·실행 중·실행 후 통제를 하나의 원클릭 시나리오로 묶고, 실제 측정값이 SLO를 만족할 때만 release gate를 통과시킵니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase15-portfolio.ps1
+```
+
+- OPA 정책 요청 60회의 p50·p95·p99 지연시간
+- 정상 6건·공격 6건 fixture 기반 precision·recall·FPR
+- 공격 탐지 p95와 실제 detect-to-block MTTR
+- container별 CPU·메모리 사용량
+- 19개 테스트와 80% 이상 branch coverage
+- 실패 경로에서도 실행되는 완전한 container·network·volume teardown
+- 비밀정보와 container ID를 제외한 기계 판독 evidence
+- 2분 20초 통합 공격 데모와 포트폴리오 실행 화면
+
+현재 검증 결과는 정책 p95 **21.211ms**, p99 **27.964ms**, 공격 탐지 p95 **26.179ms**, detect-to-block **2.9초**, recall **100%**, FPR **0%**입니다.
+
+[Phase 15 보고서](docs/PHASE15.md), [진행 체크리스트](docs/PHASE15_PROGRESS.md), [검증 증거](docs/evidence/phase15-portfolio-release.json), [통합 공격 데모](docs/demo/phase15-integrated-attack.mp4)를 제공합니다.
+
+## Threat → Control → Evidence
+
+| Threat | Control | Evidence |
+|---|---|---|
+| 간접 프롬프트 인젝션이 도구 호출을 유도 | provenance-aware taint와 실행 전 guard | [Phase 10](docs/evidence/phase10-local-llm-injection.json) |
+| 탈취 OAuth token과 과도한 agent 권한 | audience·scope·delegation chain·ancestor revocation | [Phase 9](docs/evidence/phase9-mcp-oauth.json), [Phase 14](docs/evidence/phase14-safe-response.json) |
+| 서명 label을 재사용한 MCP 코드·도구 변조 | GitHub OIDC identity, Rekor, SBOM policy, signed `tools/list`, digest-only launch | [Phase 13](docs/evidence/phase13-keyless-admission.json) |
+| 정책 거부 이후 process·network 실행 | intent/runtime correlation과 Tetragon observation | [Phase 4](docs/evidence/phase4-tetragon-validation.json), [Phase 6](docs/evidence/phase6-threat-detection.json) |
+| Kubernetes workload identity와 RBAC 악용 | Pod UID·ServiceAccount binding과 audit attack chain | [Phase 7](docs/evidence/phase7-kubernetes-identity.json), [Phase 8](docs/evidence/phase8-kubernetes-audit-chain.json) |
+| 시간 근접 이벤트의 잘못된 자동 대응 | 동일 agent·resource의 명시적 parent edge | [Phase 14](docs/evidence/phase14-safe-response.json) |
+| 중복 또는 영구 격리로 인한 서비스 피해 | SHA-256 response key, TTL recovery, human override | [Phase 14](docs/evidence/phase14-safe-response.json) |
+| 로그의 token·인자·container identity 노출 | fingerprint 기반 OCSF와 집계 evidence | [Phase 15](docs/evidence/phase15-portfolio-release.json) |
+
 ## Security controls
 
 - **Default deny**: 정의되지 않은 도구와 권한은 기본 차단
@@ -415,9 +461,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-native-alertin
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-supply-chain.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase13-admission.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase14-response.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase15-portfolio.ps1
 ```
 
-기본 검증은 OPA, Agent API, MCP, OAuth, sensor, detection, Kubernetes attack-chain 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 13 공급망 모듈은 26개 테스트와 82% 커버리지를 통과합니다. Phase 14는 Response Engine·Authorization Server·MCP OAuth 관련 테스트 43개, Response Engine 80% 이상 coverage와 실제 token 폐기·container/network 격리·복구를 검증합니다.
+기본 검증은 OPA, Agent API, MCP, OAuth, sensor, detection, Kubernetes attack-chain 테스트와 정책·승인·runtime 회귀를 확인합니다. Phase 13 공급망 모듈은 26개 테스트와 82% 커버리지를 통과합니다. Phase 14는 관련 테스트 43개와 실제 token 폐기·container/network 격리·복구를 검증합니다. Phase 15는 지표 계산과 실행 경계 테스트 19개, 81.33% branch coverage, 정상·공격 fixture와 완전한 teardown을 검증합니다.
 
 ## Tech stack
 
@@ -441,6 +488,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase14-respon
 | Kubernetes Audit Log | RBAC privilege escalation and API-to-runtime attack chain |
 | OAuth 2.1 + RS256 JWT | MCP protected resource, PKCE and tool scopes |
 | Phase 14 Response Engine | Delegated identity, causal graph, token revocation, reversible Docker isolation |
+| Phase 15 Release Gate | Tail latency, MTTR, resource, FPR·recall, teardown evidence |
 | Docker Compose | 격리·재현 가능한 로컬 환경 |
 
 ## Roadmap
@@ -463,6 +511,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-phase14-respon
 - [x] Agent delegated-token chain과 causal attack graph
 - [x] OAuth token 폐기와 가역적 container·network 격리
 - [x] 중복 대응 방지, TTL 복구, human override, MTTR 측정
+- [x] p50·p95·p99, MTTR, CPU·메모리, recall·FPR 측정
+- [x] 정상·공격 fixture 기반 최종 release gate
+- [x] 원클릭 통합 실행과 완전한 teardown
+- [x] Threat → Control → Evidence 포트폴리오와 통합 공격 데모
 
 ## References
 
@@ -499,3 +551,5 @@ Phase 8은 전용 `arsl-phase8` 클러스터와 `kubectl` impersonation만 사�
 Phase 9 Authorization Server는 로컬 lab 전용이며 signing key와 client secret을 실행 시 생성합니다. 발급된 bearer token과 authorization code는 Git에 저장하지 않습니다.
 
 Phase 14 자동 격리는 `com.arsl.phase14.managed=true` label과 예상 Compose project가 일치하는 컨테이너에만 적용합니다. 최초 inspect의 container ID를 복구까지 유지하고, token·client secret·raw jti는 evidence에 기록하지 않습니다.
+
+Phase 15 원클릭 실행은 로컬 Compose project에 속한 container·network·volume만 정리합니다. 정적 evidence에는 집계 지표만 저장하며 access token, client secret, 원본 도구 인자, container ID를 포함하지 않습니다. 측정값은 로컬 회귀 기준이며 운영 성능 보장이나 독립적인 보안 인증을 의미하지 않습니다.

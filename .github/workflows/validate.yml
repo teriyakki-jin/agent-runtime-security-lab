@@ -37,6 +37,7 @@ jobs:
           python -m compileall -q kubernetes
           python -m compileall -q supply_chain
           python -m compileall -q response_engine
+          python -m compileall -q portfolio_release
 
       - name: Test Tetragon event adapter
         run: |
@@ -45,6 +46,7 @@ jobs:
           python -m unittest discover -s kubernetes/tests -v
           python -m unittest discover -s supply_chain/tests -v
           python -m unittest discover -s response_engine/tests -v
+          python -m unittest discover -s portfolio_release/tests -v
           python -m json.tool docs/evidence/phase4-tetragon-validation.json > /dev/null
           python -m json.tool docs/evidence/phase5-soc-validation.json > /dev/null
           python -m json.tool docs/evidence/phase6-threat-detection.json > /dev/null
@@ -56,6 +58,7 @@ jobs:
           python -m json.tool docs/evidence/phase12-mcp-supply-chain.json > /dev/null
           python -m json.tool docs/evidence/phase13-keyless-admission.json > /dev/null
           python -m json.tool docs/evidence/phase14-safe-response.json > /dev/null
+          python -m json.tool docs/evidence/phase15-portfolio-release.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-ocsf-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-alerts-template.json > /dev/null
           python -m json.tool deploy/elasticsearch/arsl-notifications-template.json > /dev/null
@@ -188,6 +191,29 @@ jobs:
           auth_dockerfile = Path("auth-server/Dockerfile").read_text()
           assert "python:3.12-slim@sha256:" in auth_dockerfile
           assert "--require-hashes" in auth_dockerfile
+          phase15 = json.loads(Path("docs/evidence/phase15-portfolio-release.json").read_text())
+          assert phase15["result"] == "passed"
+          assert all(phase15["checks"].values())
+          assert phase15["policy_latency"]["sample_count"] == 60
+          assert phase15["quality"] == {
+              "fixture_count": 12,
+              "attack_count": 6,
+              "normal_count": 6,
+              "true_positive": 6,
+              "false_positive": 0,
+              "true_negative": 6,
+              "false_negative": 0,
+              "recall": 1.0,
+              "precision": 1.0,
+              "false_positive_rate": 0.0,
+          }
+          assert phase15["tests"]["passed"] == 19
+          assert phase15["tests"]["coverage_percent"] >= 80
+          assert all(phase15["teardown"].values())
+          assert not any(phase15["privacy"].values())
+          assert Path("docs/screenshots/phase15-portfolio-release.png").stat().st_size > 100_000
+          assert Path("docs/demo/phase15-integrated-attack.mp4").stat().st_size > 100_000
+          assert Path("docs/phase15-portfolio-report.html").is_file()
           manifest = json.loads(Path("deploy/supply-chain/trusted-mcp-tools.json").read_text())
           assert manifest["schema_version"] == 2
           assert manifest["policy"]["require_signature"] is True
@@ -240,9 +266,8 @@ jobs:
       - name: Run container integration scenarios
         shell: pwsh
         run: |
-          ./scripts/run-lab.ps1
-          docker compose exec -T auth-server python -m unittest discover -s tests -v
-          docker compose exec -T mcp-server python -m unittest discover -s tests -p 'test_oauth.py' -v
+          python -m pip install --require-hashes -r portfolio_release/requirements-ci.lock
+          ./scripts/run-phase15-portfolio.ps1
 
       - name: Collect container logs on failure
         if: failure()
