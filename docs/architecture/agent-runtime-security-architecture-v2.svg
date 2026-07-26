@@ -1,0 +1,279 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1240" viewBox="0 0 1800 1240" role="img" aria-labelledby="title desc">
+  <title id="title">Agent Runtime Security Platform Architecture</title>
+  <desc id="desc">Layered architecture covering pre-execution trust controls, runtime observation and correlation, and post-execution detection and incident response.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#10213a" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="headerGradient" x1="0" x2="1">
+      <stop offset="0" stop-color="#14213d"/>
+      <stop offset="1" stop-color="#203b69"/>
+    </linearGradient>
+    <linearGradient id="blueGradient" x1="0" x2="1">
+      <stop offset="0" stop-color="#2357d9"/>
+      <stop offset="1" stop-color="#4d7cff"/>
+    </linearGradient>
+    <linearGradient id="purpleGradient" x1="0" x2="1">
+      <stop offset="0" stop-color="#6b46d9"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="tealGradient" x1="0" x2="1">
+      <stop offset="0" stop-color="#087f8c"/>
+      <stop offset="1" stop-color="#16a3a8"/>
+    </linearGradient>
+    <linearGradient id="orangeGradient" x1="0" x2="1">
+      <stop offset="0" stop-color="#c75b12"/>
+      <stop offset="1" stop-color="#f08a24"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#51627a"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3569e8"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#db3a4a"/>
+    </marker>
+    <style>
+      .label { font-family: Inter, "Segoe UI", Arial, sans-serif; fill: #14213d; }
+      .muted { fill: #64748b; }
+      .white { fill: #ffffff; }
+      .band { fill: #ffffff; stroke: #d9e1ec; stroke-width: 1.5; }
+      .node { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; filter: url(#shadow); }
+      .soft-blue { fill: #eef4ff; stroke: #9bb8ff; }
+      .soft-purple { fill: #f4efff; stroke: #bea8f7; }
+      .soft-teal { fill: #e9f8f8; stroke: #8bd4d5; }
+      .soft-orange { fill: #fff4e8; stroke: #f4bd82; }
+      .soft-red { fill: #fff0f1; stroke: #f2a1aa; }
+      .flow { fill: none; stroke: #51627a; stroke-width: 3; marker-end: url(#arrow); }
+      .flow-blue { fill: none; stroke: #3569e8; stroke-width: 3.5; marker-end: url(#arrowBlue); }
+      .telemetry { fill: none; stroke: #087f8c; stroke-width: 3; stroke-dasharray: 8 7; marker-end: url(#arrow); }
+      .deny { fill: none; stroke: #db3a4a; stroke-width: 3; stroke-dasharray: 7 6; marker-end: url(#arrowRed); }
+      .thin { stroke-width: 2.25; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1240" fill="#f4f7fb"/>
+
+  <rect x="52" y="40" width="1696" height="74" rx="22" fill="url(#headerGradient)" filter="url(#shadow)"/>
+  <text x="88" y="75" class="label white" font-size="27" font-weight="600">AGENT RUNTIME SECURITY PLATFORM</text>
+  <text x="88" y="99" class="label white" font-size="14" opacity="0.76">Pre-execution trust · Runtime enforcement · Detection, response and evidence</text>
+  <g transform="translate(1260 64)">
+    <line x1="0" y1="0" x2="44" y2="0" class="flow-blue thin"/>
+    <text x="56" y="5" class="label white" font-size="12">control / execution</text>
+    <line x1="202" y1="0" x2="246" y2="0" class="telemetry thin"/>
+    <text x="258" y="5" class="label white" font-size="12">telemetry</text>
+    <line x1="362" y1="0" x2="406" y2="0" class="deny thin"/>
+    <text x="418" y="5" class="label white" font-size="12">deny / finding</text>
+  </g>
+
+  <!-- PRE-EXECUTION -->
+  <rect x="52" y="138" width="1696" height="388" rx="24" class="band"/>
+  <rect x="76" y="158" width="286" height="34" rx="17" fill="url(#blueGradient)"/>
+  <text x="99" y="181" class="label white" font-size="14" font-weight="600">01 · PRE-EXECUTION CONTROL</text>
+
+  <text x="92" y="224" class="label muted" font-size="12" font-weight="600" letter-spacing="1.2">INPUTS</text>
+  <rect x="82" y="242" width="216" height="66" rx="15" class="node soft-blue"/>
+  <circle cx="112" cy="275" r="17" fill="#3569e8"/>
+  <text x="112" y="280" text-anchor="middle" class="label white" font-size="13" font-weight="600">A</text>
+  <text x="140" y="270" class="label" font-size="15" font-weight="600">Attack scenarios</text>
+  <text x="140" y="290" class="label muted" font-size="12">trusted + adversarial tests</text>
+
+  <rect x="82" y="330" width="216" height="66" rx="15" class="node soft-purple"/>
+  <circle cx="112" cy="363" r="17" fill="#7c52e7"/>
+  <text x="112" y="368" text-anchor="middle" class="label white" font-size="13" font-weight="600">D</text>
+  <text x="140" y="358" class="label" font-size="15" font-weight="600">External document</text>
+  <text x="140" y="378" class="label muted" font-size="12">untrusted content</text>
+
+  <rect x="338" y="330" width="192" height="66" rx="15" class="node soft-purple"/>
+  <text x="434" y="357" text-anchor="middle" class="label" font-size="15" font-weight="600">Local Qwen3</text>
+  <text x="434" y="378" text-anchor="middle" class="label muted" font-size="12">llama.cpp inference</text>
+
+  <rect x="570" y="330" width="206" height="66" rx="15" class="node soft-red"/>
+  <text x="673" y="357" text-anchor="middle" class="label" font-size="15" font-weight="600">Provenance guard</text>
+  <text x="673" y="378" text-anchor="middle" class="label muted" font-size="12">taint + injection scoring</text>
+
+  <rect x="352" y="225" width="304" height="82" rx="18" fill="url(#blueGradient)" filter="url(#shadow)"/>
+  <text x="504" y="258" text-anchor="middle" class="label white" font-size="19" font-weight="600">Agent Gateway</text>
+  <text x="504" y="282" text-anchor="middle" class="label white" font-size="12" opacity="0.82">policy boundary · intent recording · tool dispatch</text>
+
+  <text x="728" y="224" class="label muted" font-size="12" font-weight="600" letter-spacing="1.2">POLICY &amp; CONSENT</text>
+  <rect x="714" y="242" width="214" height="66" rx="15" class="node soft-blue"/>
+  <text x="821" y="270" text-anchor="middle" class="label" font-size="15" font-weight="600">OPA policy engine</text>
+  <text x="821" y="290" text-anchor="middle" class="label muted" font-size="12">allow · review · deny</text>
+  <rect x="800" y="330" width="170" height="66" rx="15" class="node"/>
+  <text x="885" y="358" text-anchor="middle" class="label" font-size="15" font-weight="600">Human reviewer</text>
+  <text x="885" y="378" text-anchor="middle" class="label muted" font-size="12">one-time capability</text>
+
+  <text x="1012" y="224" class="label muted" font-size="12" font-weight="600" letter-spacing="1.2">IDENTITY &amp; ARTIFACT TRUST</text>
+  <rect x="992" y="242" width="220" height="66" rx="15" class="node soft-teal"/>
+  <text x="1102" y="270" text-anchor="middle" class="label" font-size="15" font-weight="600">OAuth server</text>
+  <text x="1102" y="290" text-anchor="middle" class="label muted" font-size="12">RS256 · audience · scopes</text>
+
+  <rect x="992" y="330" width="220" height="66" rx="15" class="node soft-orange"/>
+  <text x="1102" y="358" text-anchor="middle" class="label" font-size="15" font-weight="600">Trusted tool manifest</text>
+  <text x="1102" y="378" text-anchor="middle" class="label muted" font-size="12">canonical tools + scopes</text>
+
+  <rect x="1252" y="330" width="208" height="66" rx="15" class="node soft-orange"/>
+  <text x="1356" y="358" text-anchor="middle" class="label" font-size="15" font-weight="600">OCI registry</text>
+  <text x="1356" y="378" text-anchor="middle" class="label muted" font-size="12">signed image + SBOM</text>
+
+  <rect x="1252" y="225" width="276" height="82" rx="18" fill="url(#orangeGradient)" filter="url(#shadow)"/>
+  <text x="1390" y="258" text-anchor="middle" class="label white" font-size="18" font-weight="600">Supply-chain trust gate</text>
+  <text x="1390" y="282" text-anchor="middle" class="label white" font-size="12" opacity="0.84">Cosign · digest · SBOM · manifest</text>
+
+  <rect x="1562" y="225" width="154" height="171" rx="20" fill="url(#purpleGradient)" filter="url(#shadow)"/>
+  <circle cx="1639" cy="267" r="22" fill="#ffffff" opacity="0.18"/>
+  <text x="1639" y="274" text-anchor="middle" class="label white" font-size="18" font-weight="600">MCP</text>
+  <text x="1639" y="316" text-anchor="middle" class="label white" font-size="18" font-weight="600">Tool Server</text>
+  <text x="1639" y="341" text-anchor="middle" class="label white" font-size="12" opacity="0.82">approved digest</text>
+  <text x="1639" y="360" text-anchor="middle" class="label white" font-size="12" opacity="0.82">scoped token</text>
+
+  <!-- PRE-EXECUTION EDGES -->
+  <path d="M298 275 H330 Q352 275 352 266" class="flow-blue"/>
+  <path d="M298 363 H338" class="flow"/>
+  <path d="M530 363 H570" class="flow"/>
+  <path d="M673 330 V310 Q673 266 656 266" class="flow-blue"/>
+  <path d="M656 246 H714" class="flow-blue"/>
+  <path d="M714 294 H656" class="flow thin"/>
+  <path d="M885 330 V318 H690 Q674 318 674 300 H656" class="flow"/>
+  <path d="M656 225 V198 H970 V275 H992" class="flow-blue"/>
+  <path d="M1102 308 V420 H1600 Q1639 420 1639 396" class="flow-blue"/>
+  <path d="M1212 363 H1236 Q1252 363 1252 299" class="flow"/>
+  <path d="M1460 363 H1514 Q1528 363 1528 307" class="flow"/>
+  <path d="M1528 266 H1562" class="flow-blue"/>
+  <path d="M656 292 V448 H1538 Q1562 448 1562 370" class="flow-blue"/>
+  <text x="1037" y="438" text-anchor="middle" class="label muted" font-size="11">allow or signed approval</text>
+
+  <!-- RUNTIME -->
+  <rect x="52" y="550" width="1696" height="302" rx="24" class="band"/>
+  <rect x="76" y="570" width="378" height="34" rx="17" fill="url(#tealGradient)"/>
+  <text x="99" y="593" class="label white" font-size="14" font-weight="600">02 · RUNTIME OBSERVATION &amp; CORRELATION</text>
+
+  <rect x="82" y="642" width="202" height="72" rx="16" class="node soft-blue"/>
+  <text x="183" y="671" text-anchor="middle" class="label" font-size="15" font-weight="600">Intent ledger</text>
+  <text x="183" y="692" text-anchor="middle" class="label muted" font-size="12">authorized action record</text>
+
+  <rect x="326" y="642" width="202" height="72" rx="16" class="node soft-purple"/>
+  <text x="427" y="671" text-anchor="middle" class="label" font-size="15" font-weight="600">Linux runtime</text>
+  <text x="427" y="692" text-anchor="middle" class="label muted" font-size="12">actual tool behavior</text>
+
+  <rect x="570" y="642" width="202" height="72" rx="16" class="node soft-teal"/>
+  <text x="671" y="671" text-anchor="middle" class="label" font-size="15" font-weight="600">Tetragon eBPF</text>
+  <text x="671" y="692" text-anchor="middle" class="label muted" font-size="12">process · file · network</text>
+
+  <rect x="814" y="642" width="202" height="72" rx="16" class="node soft-teal"/>
+  <text x="915" y="671" text-anchor="middle" class="label" font-size="15" font-weight="600">Signed adapter</text>
+  <text x="915" y="692" text-anchor="middle" class="label muted" font-size="12">authenticated JSON events</text>
+
+  <rect x="1058" y="642" width="202" height="72" rx="16" class="node soft-teal"/>
+  <text x="1159" y="671" text-anchor="middle" class="label" font-size="15" font-weight="600">Runtime observations</text>
+  <text x="1159" y="692" text-anchor="middle" class="label muted" font-size="12">normalized evidence</text>
+
+  <rect x="1302" y="642" width="202" height="72" rx="16" fill="url(#tealGradient)" filter="url(#shadow)"/>
+  <text x="1403" y="671" text-anchor="middle" class="label white" font-size="15" font-weight="600">Intent correlator</text>
+  <text x="1403" y="692" text-anchor="middle" class="label white" font-size="12" opacity="0.82">intent vs. observation</text>
+
+  <rect x="1546" y="642" width="170" height="72" rx="16" class="node soft-red"/>
+  <text x="1631" y="671" text-anchor="middle" class="label" font-size="15" font-weight="600">OCSF finding</text>
+  <text x="1631" y="692" text-anchor="middle" class="label muted" font-size="12">severity + mapping</text>
+
+  <rect x="326" y="752" width="202" height="62" rx="15" class="node"/>
+  <text x="427" y="778" text-anchor="middle" class="label" font-size="14" font-weight="600">K8s Pod inventory</text>
+  <text x="427" y="797" text-anchor="middle" class="label muted" font-size="11">UID · namespace · SA</text>
+
+  <rect x="570" y="752" width="202" height="62" rx="15" class="node"/>
+  <text x="671" y="778" text-anchor="middle" class="label" font-size="14" font-weight="600">Identity resolver</text>
+  <text x="671" y="797" text-anchor="middle" class="label muted" font-size="11">workload binding</text>
+
+  <rect x="814" y="752" width="202" height="62" rx="15" class="node"/>
+  <text x="915" y="778" text-anchor="middle" class="label" font-size="14" font-weight="600">K8s Audit Log</text>
+  <text x="915" y="797" text-anchor="middle" class="label muted" font-size="11">API identity + RBAC</text>
+
+  <rect x="1058" y="752" width="202" height="62" rx="15" class="node"/>
+  <text x="1159" y="778" text-anchor="middle" class="label" font-size="14" font-weight="600">Attack-chain correlator</text>
+  <text x="1159" y="797" text-anchor="middle" class="label muted" font-size="11">RBAC → Pod → exec</text>
+
+  <!-- RUNTIME EDGES -->
+  <path d="M1639 396 V526 Q1639 550 1615 550 H451 Q427 550 427 642" class="flow-blue"/>
+  <text x="1030" y="540" text-anchor="middle" class="label muted" font-size="11">approved tool execution</text>
+  <path d="M504 307 V606 Q504 622 488 622 H199 Q183 622 183 642" class="flow-blue"/>
+  <path d="M528 678 H570" class="telemetry"/>
+  <path d="M772 678 H814" class="telemetry"/>
+  <path d="M1016 678 H1058" class="telemetry"/>
+  <path d="M1260 678 H1302" class="flow"/>
+  <path d="M284 678 H1282 Q1302 678 1302 678" class="flow thin"/>
+  <path d="M1504 678 H1546" class="deny"/>
+  <path d="M427 752 V730 Q427 714 443 714 H570" class="telemetry thin"/>
+  <path d="M671 714 V752" class="telemetry thin"/>
+  <path d="M772 783 H1280 Q1302 783 1302 700" class="flow thin"/>
+  <path d="M1016 783 H1058" class="telemetry thin"/>
+  <path d="M1260 783 H1514 Q1546 783 1546 700" class="flow thin"/>
+  <path d="M673 396 V608 Q673 626 691 626 H1518 Q1546 626 1546 654" class="deny"/>
+  <text x="1076" y="618" text-anchor="middle" class="label" fill="#db3a4a" font-size="11">tainted action blocked</text>
+  <path d="M1390 307 V592 Q1390 608 1406 608 H1518 Q1546 608 1546 654" class="deny"/>
+  <text x="1462" y="598" text-anchor="middle" class="label" fill="#db3a4a" font-size="11">artifact denied</text>
+
+  <!-- POST-EXECUTION -->
+  <rect x="52" y="878" width="1696" height="310" rx="24" class="band"/>
+  <rect x="76" y="898" width="354" height="34" rx="17" fill="url(#purpleGradient)"/>
+  <text x="99" y="921" class="label white" font-size="14" font-weight="600">03 · DETECTION, RESPONSE &amp; EVIDENCE</text>
+
+  <rect x="1462" y="966" width="220" height="74" rx="16" class="node soft-purple"/>
+  <text x="1572" y="996" text-anchor="middle" class="label" font-size="15" font-weight="600">Logstash ingestion</text>
+  <text x="1572" y="1018" text-anchor="middle" class="label muted" font-size="12">OCSF API activity + findings</text>
+
+  <rect x="1178" y="966" width="220" height="74" rx="16" fill="url(#purpleGradient)" filter="url(#shadow)"/>
+  <text x="1288" y="996" text-anchor="middle" class="label white" font-size="16" font-weight="600">Elasticsearch</text>
+  <text x="1288" y="1018" text-anchor="middle" class="label white" font-size="12" opacity="0.82">normalized security evidence</text>
+
+  <rect x="876" y="946" width="236" height="66" rx="15" class="node soft-blue"/>
+  <text x="994" y="973" text-anchor="middle" class="label" font-size="14" font-weight="600">Detection-as-Code</text>
+  <text x="994" y="993" text-anchor="middle" class="label muted" font-size="11">ES|QL runner + rule mapping</text>
+
+  <rect x="876" y="1036" width="236" height="66" rx="15" class="node soft-blue"/>
+  <text x="994" y="1063" text-anchor="middle" class="label" font-size="14" font-weight="600">Elastic Security rules</text>
+  <text x="994" y="1083" text-anchor="middle" class="label muted" font-size="11">scheduled native detections</text>
+
+  <rect x="588" y="946" width="220" height="66" rx="15" class="node soft-orange"/>
+  <text x="698" y="973" text-anchor="middle" class="label" font-size="14" font-weight="600">Idempotent alerts</text>
+  <text x="698" y="993" text-anchor="middle" class="label muted" font-size="11">stable rule + source UID</text>
+
+  <rect x="588" y="1036" width="220" height="66" rx="15" class="node soft-red"/>
+  <text x="698" y="1063" text-anchor="middle" class="label" font-size="14" font-weight="600">Native alerts</text>
+  <text x="698" y="1083" text-anchor="middle" class="label muted" font-size="11">connector delivery</text>
+
+  <rect x="300" y="946" width="220" height="66" rx="15" class="node"/>
+  <text x="410" y="973" text-anchor="middle" class="label" font-size="14" font-weight="600">Kibana dashboards</text>
+  <text x="410" y="993" text-anchor="middle" class="label muted" font-size="11">SOC + threat mapping</text>
+
+  <rect x="300" y="1036" width="220" height="66" rx="15" class="node"/>
+  <text x="410" y="1063" text-anchor="middle" class="label" font-size="14" font-weight="600">Incident timeline</text>
+  <text x="410" y="1083" text-anchor="middle" class="label muted" font-size="11">privacy-safe delivery</text>
+
+  <rect x="82" y="966" width="170" height="136" rx="18" class="node soft-teal"/>
+  <text x="167" y="1002" text-anchor="middle" class="label" font-size="15" font-weight="600">Jaeger</text>
+  <text x="167" y="1024" text-anchor="middle" class="label muted" font-size="12">OpenTelemetry</text>
+  <line x1="110" y1="1048" x2="224" y2="1048" stroke="#8bd4d5"/>
+  <text x="167" y="1073" text-anchor="middle" class="label muted" font-size="11">agent + tool traces</text>
+
+  <!-- POST-EXECUTION EDGES -->
+  <path d="M1631 714 V942 Q1631 966 1607 966" class="flow"/>
+  <path d="M1462 1003 H1398" class="flow"/>
+  <path d="M1178 988 H1112" class="flow"/>
+  <path d="M1178 1020 H1134 Q1112 1020 1112 1069" class="flow"/>
+  <path d="M876 979 H808" class="flow"/>
+  <path d="M876 1069 H808" class="flow"/>
+  <path d="M588 979 H520" class="flow"/>
+  <path d="M588 1069 H520" class="flow"/>
+  <path d="M1288 1040 V1124 H410 V1102" class="flow thin"/>
+  <text x="835" y="1148" text-anchor="middle" class="label muted" font-size="11">native alert delivery and incident evidence</text>
+  <path d="M400 307 V520 H32 V1034 H82" class="telemetry"/>
+  <text x="22" y="738" transform="rotate(-90 22 738)" text-anchor="middle" class="label muted" font-size="11">OpenTelemetry traces</text>
+  <path d="M550 307 V510 H1730 V944 Q1730 966 1682 966" class="telemetry thin"/>
+  <text x="1718" y="770" transform="rotate(-90 1718 770)" text-anchor="middle" class="label muted" font-size="11">OCSF API Activity</text>
+
+  <text x="90" y="1164" class="label muted" font-size="11">Solid: policy and execution path</text>
+  <text x="292" y="1164" class="label muted" font-size="11">Dashed teal: telemetry and evidence</text>
+  <text x="545" y="1164" class="label muted" font-size="11">Dashed red: blocked action or security finding</text>
+</svg>

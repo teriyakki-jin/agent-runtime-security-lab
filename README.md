@@ -57,6 +57,13 @@ AI Agent가 **허가받은 행동(intent)** 과 컨테이너에서 **실제로 �
 
 ## Architecture
 
+[![Agent Runtime Security Platform architecture](docs/architecture/agent-runtime-security-architecture-v2.svg)](docs/architecture/agent-runtime-security-architecture-v2.svg)
+
+> 이미지를 클릭하면 전체 크기의 아키텍처 다이어그램을 볼 수 있습니다.
+
+<details>
+<summary>간단한 실행 흐름 보기</summary>
+
 ```mermaid
 flowchart LR
     TEST["Attack scenarios"] --> API["Agent Gateway"]
@@ -102,6 +109,8 @@ flowchart LR
     GATE -->|"allow signed digest"| MCP
     GATE -->|"deny tag / unsigned / drift"| FINDING
 ```
+
+</details>
 
 기본 Compose와 GitHub Actions는 결정론적 시뮬레이터로 회귀 검증합니다. 별도 Phase 4 검증은 Windows Docker Desktop의 WSL2 Linux 커널에 Tetragon v1.7.0 eBPF 프로그램을 실제로 attach해 커널 이벤트를 수집합니다.
 
