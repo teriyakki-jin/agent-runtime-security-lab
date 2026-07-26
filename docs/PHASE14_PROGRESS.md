@@ -15,6 +15,6 @@
 - [x] token·secret·raw jti를 제외한 evidence 생성
 - [x] 43개 Phase 14 관련 테스트와 80% 이상 Response Engine coverage
 - [x] 실제 OAuth·Docker end-to-end 검증
-- [ ] GitHub Actions와 Draft PR 최종 검증
+- [x] GitHub Actions와 Draft PR 최종 검증
 
-현재 진행률: **95%**
+현재 진행률: **100%**
