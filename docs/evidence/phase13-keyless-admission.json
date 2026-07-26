@@ -1,6 +1,6 @@
 {
   "phase": 13,
-  "result": "local_passed_ci_pending",
+  "result": "passed",
   "image": {
     "repository": "local-registry/arsl/mcp-server",
     "digest": "sha256:baa11174c11c939e69e88d09402bd510125661e793de31c0289d362e00a96a77"
@@ -29,7 +29,9 @@
   },
   "github_keyless": {
     "workflow": ".github/workflows/supply-chain.yml",
-    "status": "pending",
+    "status": "passed",
+    "run_id": 30190613140,
+    "run_url": "https://github.com/teriyakki-jin/agent-runtime-security-lab/actions/runs/30190613140",
     "identity_scope": "repository/workflow/ref",
     "rekor_required": true
   },

@@ -16,7 +16,7 @@
 - [x] 실제 컨테이너의 `.Config.Image`가 admitted digest인지 검증
 - [x] 공급망 테스트 26/26 및 커버리지 82% 통과
 - [x] 로컬 end-to-end admission 검증
-- [ ] GitHub Keyless Supply Chain workflow 최종 통과
-- [ ] Draft PR 검증 완료
+- [x] GitHub Keyless Supply Chain workflow 최종 통과
+- [x] Draft PR 검증 완료
 
-현재 진행률: **88%**
+현재 진행률: **100%**

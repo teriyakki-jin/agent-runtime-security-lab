@@ -129,21 +129,33 @@ $Checks = [ordered]@{
     exact_digest_launched = $ActualImage -eq $ExpectedImage
     hardened_runtime_started = $RuntimeState -eq 'true|true|none'
 }
+$ResolvedEvidence = Join-Path $LabRoot $EvidencePath
+$GitHubKeyless = [ordered]@{ workflow = '.github/workflows/supply-chain.yml'; status = 'pending'; identity_scope = 'repository/workflow/ref'; rekor_required = $true }
+if (Test-Path -LiteralPath $ResolvedEvidence) {
+    try {
+        $ExistingEvidence = Get-Content -Raw -LiteralPath $ResolvedEvidence | ConvertFrom-Json
+        if ($ExistingEvidence.github_keyless.status -eq 'passed') {
+            $GitHubKeyless = $ExistingEvidence.github_keyless
+        }
+    } catch {
+        Write-Warning 'Existing Phase 13 evidence was invalid and will be replaced.'
+    }
+}
+$LocalResult = @($Checks.Values | Where-Object { -not $_ }).Count -eq 0
 $Evidence = [ordered]@{
     phase = 13
-    result = if (@($Checks.Values | Where-Object { -not $_ }).Count -eq 0) { 'local_passed_ci_pending' } else { 'failed' }
+    result = if (-not $LocalResult) { 'failed' } elseif ($GitHubKeyless.status -eq 'passed') { 'passed' } else { 'local_passed_ci_pending' }
     image = [ordered]@{ repository = 'local-registry/arsl/mcp-server'; digest = $Gate.image.digest }
     inventory = [ordered]@{ expected = $Inventory.inventory.expected_count; actual = $Inventory.inventory.actual_count; matched = $Inventory.inventory.matched }
     sbom_policy = [ordered]@{ application_critical = $Policy.critical; application_high = $Policy.high; observed_critical = $Policy.observed_critical; observed_high = $Policy.observed_high; component_count = $Policy.component_count; denied_licenses = @($Policy.denied_licenses); missing_components = @($Policy.missing_components) }
     local = [ordered]@{ signing_mode = 'ephemeral-key'; rekor = 'not-applicable-offline-lab'; signed_tool_manifest_verified = $Checks.signed_tool_manifest_verified; exact_digest_launched = $Checks.exact_digest_launched; runtime_read_only = $true; runtime_network = 'none' }
-    github_keyless = [ordered]@{ workflow = '.github/workflows/supply-chain.yml'; status = 'pending'; identity_scope = 'repository/workflow/ref'; rekor_required = $true }
+    github_keyless = $GitHubKeyless
     tests = [ordered]@{ passed = 26; failed = 0; coverage_percent = 82 }
     tools = [ordered]@{ cosign = 'v3.1.2'; syft = 'v1.49.0'; grype = "v$GrypeVersion"; grype_sha256 = $GrypeHash }
     privacy = [ordered]@{ private_key_exported = $false; oidc_token_exported = $false; raw_signature_exported = $false; raw_sbom_exported = $false; raw_vulnerability_report_exported = $false }
     checks = $Checks
 }
-if ($Evidence.result -ne 'local_passed_ci_pending') { throw 'One or more Phase 13 checks failed.' }
-$ResolvedEvidence = Join-Path $LabRoot $EvidencePath
+if ($Evidence.result -eq 'failed') { throw 'One or more Phase 13 checks failed.' }
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($ResolvedEvidence, ($Evidence | ConvertTo-Json -Depth 20), $Utf8NoBom)
 $Evidence
