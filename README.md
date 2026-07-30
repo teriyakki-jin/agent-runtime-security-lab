@@ -1,6 +1,8 @@
 # Agent Runtime Security Lab
 
-![Phase 15 measured agent security](docs/screenshots/phase15-portfolio-release.png)
+[![Agent Runtime Security Lab 설명 애니메이션](docs/demo/agent-runtime-security-explainer-preview.gif)](docs/demo/phase15-integrated-attack.mp4)
+
+> 애니메이션을 클릭하면 원클릭 실행부터 공급망 검증, 런타임 탐지, 자동 대응, 증거 확인까지 담은 2분 20초 전체 데모를 볼 수 있습니다.
 
 AI Agent의 **허가된 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 MCP 도구 오용을 탐지·격리하고 OCSF 증거로 남기는 로컬 보안 실습 프로젝트입니다.
 
