@@ -1,12 +1,40 @@
 # Agent Runtime Security Lab
 
-[![Agent Runtime Security Lab 설명 애니메이션](docs/demo/agent-runtime-security-explainer-preview.gif)](docs/demo/phase15-integrated-attack.mp4)
+> **AI Agent가 도구를 실행하기 전·실행 중·실행 후를 통제하는 로컬 런타임 보안 플랫폼**
 
-> 애니메이션을 클릭하면 원클릭 실행부터 공급망 검증, 런타임 탐지, 자동 대응, 증거 확인까지 담은 2분 20초 전체 데모를 볼 수 있습니다.
+악성 문서나 탈취된 토큰이 AI Agent를 속여 **MCP 도구·컨테이너를 악용하는 공격**을 재현하고, 정책 검사부터 런타임 탐지·자동 격리·감사 증거 보존까지 하나의 실습 환경에서 검증합니다.
 
-AI Agent의 **허가된 행동(intent)** 과 컨테이너에서 **실제로 관측된 행동(runtime observation)** 을 비교해 정책 우회와 MCP 도구 오용을 탐지·격리하고 OCSF 증거로 남기는 로컬 보안 실습 프로젝트입니다.
+여기서 MCP 도구는 Agent가 파일 읽기, 셸 명령, 외부 전송 같은 **실제 작업을 수행하는 연결 통로**입니다. 예를 들어 사용자가 외부 문서의 요약을 요청했는데, 문서 안의 숨은 지시가 Agent에게 비밀 파일 전송을 요구하는 상황을 방어합니다.
+
+## 한눈에 보는 공격 방어 흐름
+
+```text
+악성 문서 / 탈취 토큰
+        ↓
+Agent가 비인가 MCP 도구 호출 시도
+        ↓
+[실행 전] OPA 정책 · OAuth 권한 · MCP 이미지 서명 검증
+        ↓  정책을 우회해 실행되면
+[실행 중] Tetragon eBPF로 프로세스 · 파일 · 네트워크 행위 탐지
+        ↓
+[실행 후] OAuth 토큰 폐기 · 컨테이너/네트워크 TTL 격리
+        ↓
+OCSF 표준 이벤트로 변환 → Elastic/Kibana에서 증거 확인
+```
+
+즉, **AI 모델 자체를 평가하는 프로젝트가 아니라, Agent가 실제 도구와 운영체제를 건드리는 실행 경계를 방어하는 프로젝트**입니다.
+
+| 시점 | 핵심 질문 | 구현한 통제 |
+|---|---|---|
+| 실행 전 | 이 Agent가 이 도구를 실행해도 되는가? | OPA, prompt provenance, OAuth scope, signed MCP digest |
+| 실행 중 | 승인한 행동과 실제 컨테이너 행동이 같은가? | intent/runtime 상관분석, Tetragon eBPF, Kubernetes identity |
+| 실행 후 | 공격을 안전하게 멈추고 증거를 남겼는가? | token revocation, TTL isolation, OCSF, Elastic/Kibana |
 
 [2분 20초 실제 실행 데모](docs/demo/phase15-integrated-attack.mp4) · [최종 보고서](docs/PHASE15.md) · [기계 판독형 검증 증거](docs/evidence/phase15-portfolio-release.json)
+
+[![Agent Runtime Security Lab 설명 애니메이션](docs/demo/agent-runtime-security-explainer-preview.gif)](docs/demo/phase15-integrated-attack.mp4)
+
+> 애니메이션을 클릭하면 원클릭 실행, 공급망 검증, 런타임 탐지, 자동 대응, 증거 확인까지 담은 전체 데모를 볼 수 있습니다.
 
 ## 핵심 검증 결과
 
@@ -20,7 +48,7 @@ AI Agent의 **허가된 행동(intent)** 과 컨테이너에서 **실제로 관�
 
 > 위 결과는 로컬 회귀 검증값이며 운영 환경의 일반적인 공격 탐지 정확도나 용량 성능을 의미하지 않습니다. CPU·메모리는 5개 컨테이너를 실행 전·후 각 1회 측정한 스냅샷입니다.
 
-## Architecture
+## 최종 아키텍처
 
 [![Agent Runtime Security Platform architecture](docs/architecture/agent-runtime-security-architecture-v2.svg)](docs/architecture/agent-runtime-security-architecture-v2.svg)
 
